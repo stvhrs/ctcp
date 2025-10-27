@@ -5,7 +5,7 @@ export const TipeTransaksi = {
 };
 
 export const KategoriPemasukan = {
-  penjualan_buku: "Penjualan Buku",
+  penjualan_plate: "Penjualan Plat",
   penjualan_sisa_kertas: "Penjualan Sisa Kertas",
   pemasukan_lain: "Pemasukan Lain-lain",
 

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Row, Col, Grid, message, Typography } from 'antd';
+// Impor Typography ditambahkan kembali
+import { Modal, Form, Input, InputNumber, Row, Col, message, Typography } from 'antd'; 
 import { ref, push, set, serverTimestamp } from 'firebase/database'; 
 import { db } from '../../../api/firebase'; // Sesuaikan path
 
-const { Option } = Select;
+const { Text } = Typography;
 
 const BukuForm = ({ open, onCancel, initialValues }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const isEditing = !!initialValues;
-    const screens = Grid.useBreakpoint();
 
     useEffect(() => {
         if (open) { 
@@ -17,7 +17,8 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
                 form.setFieldsValue(initialValues);
             } else {
                 form.resetFields();
-                form.setFieldsValue({ stok: 0, hargaJual: 0, diskonJual: 0, diskonJualSpesial: 0 }); 
+                // Set nilai default 0 untuk field numerik (stok & harga)
+                form.setFieldsValue({ hrgBeli: 0, hrgJual: 0, stok: 0 }); 
             }
         }
     }, [initialValues, isEditing, form, open]); 
@@ -25,34 +26,34 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
     const handleSubmit = async (values) => {
         setLoading(true);
         try {
+            // Objek data baru dengan konversi angka
             const data = {
-                ...values,
-                hargaJual: Number(values.hargaJual) || 0,
-                harga_zona_2: Number(values.harga_zona_2) || 0,
-                harga_zona_3: Number(values.harga_zona_3) || 0,
-                harga_zona_4: Number(values.harga_zona_4) || 0,
-                harga_zona_5a: Number(values.harga_zona_5a) || 0,
-                harga_zona_5b: Number(values.harga_zona_5b) || 0,
-                diskonJual: Number(values.diskonJual) || 0,
-                diskonJualSpesial: Number(values.diskonJualSpesial) || 0,
-                stok: Number(values.stok) || 0,
+                noKodePlate: values.noKodePlate || "",
+                judulPlate: values.judulPlate || "",
+                ukuran: values.ukuran || "",
+                stok: Number(values.stok) || 0, // Diubah ke Number
+                hrgBeli: Number(values.hrgBeli) || 0,
+                hrgJual: Number(values.hrgJual) || 0,
+                merek: values.merek || "",
                 updatedAt: serverTimestamp(), 
             };
 
             if (isEditing) {
-                const bukuRef = ref(db, `buku/${initialValues.id}`);
-                await set(bukuRef, {
-                    ...initialValues, 
+                const plateRef = ref(db, `plate/${initialValues.id}`);
+                await set(plateRef, {
+                    ...initialValues,
                     ...data 
                 });
-                message.success("Buku berhasil diperbarui.");
+                message.success("Plat berhasil diperbarui.");
             } else {
-                const bukuListRef = ref(db, 'buku');
-                const newBukuRef = push(bukuListRef); 
+                const plateListRef = ref(db, 'plate');
+                const newBukuRef = push(plateListRef); 
                 
-                data.createdAt = serverTimestamp();
+                data.createdAt = serverTimestamp(); 
 
-                const historyRef = push(ref(db, `buku/${newBukuRef.key}/historiStok`));
+                // === LOGIKA HISTORI STOK DITAMBAHKAN KEMBALI ===
+                // Hanya untuk data baru
+                const historyRef = push(ref(db, `plate/${newBukuRef.key}/historiStok`));
                 data.historiStok = {
                     [historyRef.key]: {
                         keterangan: "Stok Awal (Manual)",
@@ -62,9 +63,10 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
                         timestamp: serverTimestamp()
                     }
                 };
+                // ===============================================
                 
                 await set(newBukuRef, data); 
-                message.success("Buku baru berhasil ditambahkan.");
+                message.success("Plat baru berhasil ditambahkan.");
             }
             onCancel();
         } catch (error) {
@@ -75,162 +77,85 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
         }
     };
 
-    // Helper JSX untuk input harga
+    // Helper JSX untuk input harga (currency formatter)
     const priceInput = (
          <InputNumber 
-            style={{ width: '100%' }} 
-            min={0} 
-            formatter={value => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} 
-            parser={value => value.replace(/Rp\s?|(,*)/g, '')} 
+           style={{ width: '100%' }} 
+           min={0} 
+           formatter={value => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} 
+           parser={value => value.replace(/Rp\s?|(,*)/g, '')} 
          />
     );
-    
-    // Opsi untuk Tipe Buku
-    const tipeBukuOptions = [
-        "Buku Teks Utama (BTU)",
-        "Buku Teks Pendamping (BTP)",
-        "LKS (Lembar Kerja Siswa)",
-        "Non Teks",
-        "Buku Guru (BG)",
-        "Umum",
-        "SK (Surat Keputusan)",
-        "SK HET (Harga Eceran Tertinggi)",
-        "Referensi",
-        "Pegangan Guru",
-        "Tematik",
-        "Modul Ajar / Modul Projek",
-        "Eksperimen / Praktikum",
-        "Panduan Evaluasi / Soal"
-    ];
 
     return (
         <Modal
-            title={isEditing ? "Edit Buku" : "Tambah Buku Baru"}
+            title={isEditing ? "Edit Plat" : "Tambah Plat Baru"}
             open={open}
             onCancel={onCancel}
             onOk={() => form.submit()}
             confirmLoading={loading} 
-            width={screens.md ? 1000 : '95vw'} 
+            width={"70vw"}
             destroyOnClose
         >
             <Form form={form} layout="vertical" onFinish={handleSubmit}>
                 <Row gutter={16}>
                     <Col sm={12} xs={24}>
-                        <Form.Item name="kode_buku" label="Kode Buku" rules={[{ required: true, message: 'Kode Buku harus diisi' }]}>
-                            <Input placeholder="Contoh: 11-22-333-4" />
+                        <Form.Item 
+                            name="noKodePlate" 
+                            label="NoKode Plate" 
+                            rules={[{ required: true, message: 'NoKode Plate harus diisi' }]}
+                        >
+                            <Input placeholder="Masukkan NoKode Plate" />
                         </Form.Item>
                     </Col>
                     <Col sm={12} xs={24}>
-                        <Form.Item name="judul" label="Judul Buku" rules={[{ required: true, message: 'Judul harus diisi' }]}>
-                            <Input placeholder="Judul lengkap buku" />
+                        <Form.Item 
+                            name="judulPlate" 
+                            label="Judul Plate" 
+                            rules={[{ required: true, message: 'Judul Plate harus diisi' }]}
+                        >
+                            <Input placeholder="Masukkan Judul Plate" />
                         </Form.Item>
                     </Col>
                     <Col sm={12} xs={24}>
-                        <Form.Item name="penerbit" label="Penerbit">
-                            <Input placeholder="Nama penerbit" />
+                        <Form.Item name="ukuran" label="Ukuran">
+                            <Input placeholder="Masukkan Ukuran" />
                         </Form.Item>
                     </Col>
-                     <Col sm={12} xs={24}>
-                        <Form.Item name="stok" label="Stok Awal" rules={[{ required: true, message: 'Stok harus diisi' }]}>
-                            <InputNumber style={{ width: '100%' }} placeholder="Stok awal" readOnly={isEditing} min={0} />
+                    <Col sm={12} xs={24}>
+                        {/* Stok diubah kembali ke InputNumber */}
+                        <Form.Item 
+                            name="stok" 
+                            label="Stok Awal"
+                            rules={[{ required: true, message: 'Stok Awal harus diisi' }]}
+                        >
+                            <InputNumber 
+                                style={{ width: '100%' }} 
+                                placeholder="Masukkan Stok Awal"
+                                min={0}
+                                // Stok Awal hanya bisa diisi saat tambah baru
+                                readOnly={isEditing} 
+                            />
                         </Form.Item>
-                        {isEditing && <Typography.Text type="secondary" style={{fontSize: 12}}>Stok hanya bisa diubah melalui menu 'Update Stok'.</Typography.Text>}
+                        {isEditing && (
+                            <Text type="secondary" style={{fontSize: 12, marginTop: -12, display: 'block'}}>
+                                Stok hanya bisa diubah melalui menu 'Update Stok'.
+                            </Text>
+                        )}
                     </Col>
-                </Row>
-                
-                {/* --- Bagian Harga Zona --- */}
-                <Typography.Text strong style={{display: 'block', marginBottom: 8, marginTop: 16}}>Data Harga</Typography.Text>
-                <Row gutter={16}>
-                     <Col sm={8} xs={24}>
-                        <Form.Item name="hargaJual" label="Harga Jual (Zona 1)">
-                           {priceInput}
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={24}>
-                        <Form.Item name="harga_zona_2" label="Harga Zona 2">
-                           {priceInput}
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={24}>
-                        <Form.Item name="harga_zona_3" label="Harga Zona 3">
-                           {priceInput}
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={24}>
-                        <Form.Item name="harga_zona_4" label="Harga Zona 4">
-                           {priceInput}
+                    <Col sm={12} xs={24}>
+                        <Form.Item name="hrgBeli" label="Hrg. Beli">
+                            {priceInput}
                         </Form.Item>
                     </Col>
-                    <Col sm={8} xs={24}>
-                        <Form.Item name="harga_zona_5a" label="Harga Zona 5a">
-                           {priceInput}
+                    <Col sm={12} xs={24}>
+                        <Form.Item name="hrgJual" label="Hrg. Jual">
+                            {priceInput}
                         </Form.Item>
                     </Col>
-                     <Col sm={8} xs={24}>
-                        <Form.Item name="harga_zona_5b" label="Harga Zona 5b">
-                           {priceInput}
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {/* --- Bagian Diskon --- */}
-                 <Typography.Text strong style={{display: 'block', marginBottom: 8, marginTop: 16}}>Data Diskon</Typography.Text>
-                <Row gutter={16}>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="diskonJual" label="Diskon Jual (%)">
-                            <InputNumber style={{ width: '100%' }} min={0} max={100} formatter={value => `${value}%`} parser={value => value.replace('%', '')} />
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="diskonJualSpesial" label="Diskon Spesial (%)">
-                            <InputNumber style={{ width: '100%' }} min={0} max={100} formatter={value => `${value}%`} parser={value => value.replace('%', '')} />
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {/* --- Bagian Kategori --- */}
-                <Typography.Text strong style={{display: 'block', marginBottom: 8, marginTop: 16}}>Data Kategori</Typography.Text>
-                <Row gutter={16}>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="mapel" label="Mata Pelajaran">
-                            <Input placeholder="Contoh: Matematika" />
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="kelas" label="Kelas">
-                            <Input placeholder="Contoh: 10 atau X" />
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="spek" label="Spek">
-                            <Select placeholder="Pilih Spek" allowClear>
-                                <Option value="Buku">Buku</Option>
-                                <Option value="LKS">LKS</Option>
-                            </Select>
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="peruntukan" label="Peruntukan">
-                             <Select placeholder="Pilih Peruntukan" allowClear>
-                                <Option value="Guru">Guru</Option>
-                                <Option value="Siswa">Siswa</Option>
-                                <Option value="Umum">Umum</Option>
-                            </Select>
-                        </Form.Item>
-                    </Col>
-                    
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="spek_kertas" label="Spek Kertas">
-                            <Input placeholder="Contoh: HVS 70gr" />
-                        </Form.Item>
-                    </Col>
-                    <Col sm={8} xs={12}>
-                        <Form.Item name="tipe_buku" label="Tipe Buku">
-                            <Select placeholder="Pilih Tipe Buku" allowClear>
-                                {tipeBukuOptions.map(tipe => (
-                                    <Option key={tipe} value={tipe}>{tipe}</Option>
-                                ))}
-                            </Select>
+                    <Col sm={12} xs={24}>
+                        <Form.Item name="merek" label="Merek">
+                            <Input placeholder="Masukkan Merek" />
                         </Form.Item>
                     </Col>
                 </Row>

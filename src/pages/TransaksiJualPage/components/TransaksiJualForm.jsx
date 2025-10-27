@@ -1,7 +1,7 @@
     // ================================
     // FILE: src/pages/transaksi-jual/components/TransaksiJualForm.jsx
     // - Memungkinkan stok negatif.
-    // - Update `updatedAt` pada buku saat stok berubah.
+    // - Update `updatedAt` pada plate saat stok berubah.
     // - Teks UI dalam Bahasa Indonesia.
     // ================================
 
@@ -41,7 +41,7 @@
         onCancel,
         mode = 'create',
         initialTx = null,
-        bukuList = [],       // <-- Pastikan prop ini terisi array buku
+        plateList = [],       // <-- Pastikan prop ini terisi array plate
         pelangganList = [], // <-- Pastikan prop ini terisi array pelanggan
         onSuccess,
         loadingDependencies // <-- Prop untuk status loading data master
@@ -155,27 +155,27 @@
 
         // ===== Helper harga otomatis (memperhitungkan zona jika ada) =====
         const getHargaOtomatis = (idBuku, pelanggan) => {
-            const buku = bukuList.find((b) => b.id === idBuku);
-            if (!buku) return { hargaSatuan: 0, diskonPersen: 0 };
+            const plate = plateList.find((b) => b.id === idBuku);
+            if (!plate) return { hargaSatuan: 0, diskonPersen: 0 };
             const isSpesial = pelanggan?.isSpesial || false;
 
             const zonaPelanggan = pelanggan?.zona;
             const hargaZonaKey = zonaPelanggan ? `harga_zona_${zonaPelanggan}` : null;
-            let hargaJualBuku = Number(buku.hargaJual) || 0; // Default Zona 1
+            let hargaJualBuku = Number(plate.hargaJual) || 0; // Default Zona 1
 
-            if (hargaZonaKey && buku[hargaZonaKey] !== undefined && buku[hargaZonaKey] !== null) {
-                hargaJualBuku = Number(buku[hargaZonaKey]) || hargaJualBuku;
+            if (hargaZonaKey && plate[hargaZonaKey] !== undefined && plate[hargaZonaKey] !== null) {
+                hargaJualBuku = Number(plate[hargaZonaKey]) || hargaJualBuku;
             }
 
             // Tentukan harga final berdasarkan spesial atau tidak
             let finalHargaSatuan = isSpesial
-                ? (Number(buku.hargaJualSpesial) || hargaJualBuku) // Jika spesial, utamakan harga spesial, fallback ke harga zona/jual
+                ? (Number(plate.hargaJualSpesial) || hargaJualBuku) // Jika spesial, utamakan harga spesial, fallback ke harga zona/jual
                 : hargaJualBuku; // Jika tidak spesial, gunakan harga zona/jual
 
             // Tentukan diskon final
             let finalDiskonPersen = isSpesial
-                ? (Number(buku.diskonJualSpesial) || 0) // Jika spesial, gunakan diskon spesial
-                : (Number(buku.diskonJual) || 0); // Jika tidak spesial, gunakan diskon jual biasa
+                ? (Number(plate.diskonJualSpesial) || 0) // Jika spesial, gunakan diskon spesial
+                : (Number(plate.diskonJual) || 0); // Jika tidak spesial, gunakan diskon jual biasa
 
             return {
                 hargaSatuan: finalHargaSatuan,
@@ -184,7 +184,7 @@
         };
 
 
-        // ===== Handler ganti pelanggan/buku =====
+        // ===== Handler ganti pelanggan/plate =====
         const handlePelangganChange = (idPelanggan) => {
             const pel = pelangganList.find((p) => p.id === idPelanggan) || null;
             setSelectedPelanggan(pel);
@@ -223,7 +223,7 @@
 
 
                 if (!items || items.length === 0 || items.some(item => !item || !item.idBuku)) {
-                    throw new Error('Transaksi harus memiliki minimal 1 item buku yang valid.');
+                    throw new Error('Transaksi harus memiliki minimal 1 item plate yang valid.');
                 }
                 const pelanggan = pelangganList.find((p) => p.id === idPelanggan);
                 if (!pelanggan) throw new Error('Pelanggan tidak valid.');
@@ -232,8 +232,8 @@
                 let totalQty = 0;
                 const processedItems = items.map((item, index) => {
                     if (!item || !item.idBuku || item.jumlah == null || item.hargaSatuan == null) { throw new Error(`Data item #${index + 1} tidak lengkap.`); }
-                    const buku = bukuList.find((b) => b.id === item.idBuku);
-                    if (!buku) throw new Error(`Buku ${item.idBuku} (item #${index + 1}) tidak ditemukan`);
+                    const plate = plateList.find((b) => b.id === item.idBuku);
+                    if (!plate) throw new Error(`Plat ${item.idBuku} (item #${index + 1}) tidak ditemukan`);
                     const hargaSatuan = Number(item.hargaSatuan);
                     const diskonPersen = Number(item.diskonPersen || 0);
                     const jumlah = Number(item.jumlah);
@@ -242,7 +242,7 @@
                     const hargaFinal = Math.round(hargaSatuan * (1 - diskonPersen / 100) * jumlah);
                     totalQty += jumlah;
                     totalTagihan += hargaFinal;
-                    return { idBuku: item.idBuku, judulBuku: buku.judul, jumlah, hargaSatuan, diskonPersen };
+                    return { idBuku: item.idBuku, judulBuku: plate.judul, jumlah, hargaSatuan, diskonPersen };
                 });
 
                 if (!data.tanggal || !dayjs(data.tanggal).isValid()) {
@@ -278,18 +278,18 @@
 
                     // Update Stok (Mode Create - Tanpa validasi negatif)
                     for (const item of processedItems) {
-                        const buku = bukuList.find((b) => b.id === item.idBuku);
+                        const plate = plateList.find((b) => b.id === item.idBuku);
                         // Ambil stok terbaru langsung dari DB untuk keamanan (opsional tapi lebih aman)
-                        // const currentBookSnap = await get(ref(db, `buku/${item.idBuku}/stok`));
+                        // const currentBookSnap = await get(ref(db, `plate/${item.idBuku}/stok`));
                         // const stokSebelum = Number(currentBookSnap.val() || 0);
-                        const stokSebelum = Number(buku?.stok || 0); // Atau dari list jika cukup cepat
+                        const stokSebelum = Number(plate?.stok || 0); // Atau dari list jika cukup cepat
                         const perubahan = -Math.abs(Number(item.jumlah));
                         const stokSesudah = stokSebelum + perubahan;
-                        const histRef = ref(db, `buku/${item.idBuku}/historiStok`);
+                        const histRef = ref(db, `plate/${item.idBuku}/historiStok`);
                         const logKey = push(histRef).key;
-                        updates[`buku/${item.idBuku}/stok`] = stokSesudah;
-                        updates[`buku/${item.idBuku}/updatedAt`] = serverTimestamp();
-                        updates[`buku/${item.idBuku}/historiStok/${logKey}`] = {
+                        updates[`plate/${item.idBuku}/stok`] = stokSesudah;
+                        updates[`plate/${item.idBuku}/updatedAt`] = serverTimestamp();
+                        updates[`plate/${item.idBuku}/historiStok/${logKey}`] = {
                             timestamp: serverTimestamp(),
                             keterangan: `Penjualan via invoice ${data.nomorInvoice}`,
                             refId: txKey,
@@ -326,21 +326,21 @@
                     for (const [idBuku, deltaQty] of stockChanges.entries()) {
                         if (deltaQty === 0) continue;
 
-                        const buku = bukuList.find((b) => b.id === idBuku);
-                        if (!buku) {
-                            console.warn(`Buku dengan ID ${idBuku} tidak ditemukan saat penyesuaian stok edit.`);
+                        const plate = plateList.find((b) => b.id === idBuku);
+                        if (!plate) {
+                            console.warn(`Plat dengan ID ${idBuku} tidak ditemukan saat penyesuaian stok edit.`);
                             continue;
                         }
-                        const stokSebelum = Number(buku.stok || 0);
+                        const stokSebelum = Number(plate.stok || 0);
                         const perubahan = deltaQty;
                         const stokSesudah = stokSebelum + perubahan;
 
-                        const histRef = ref(db, `buku/${idBuku}/historiStok`);
+                        const histRef = ref(db, `plate/${idBuku}/historiStok`);
                         const logKey = push(histRef).key;
 
-                        updates[`buku/${idBuku}/stok`] = stokSesudah;
-                        updates[`buku/${idBuku}/updatedAt`] = serverTimestamp();
-                        updates[`buku/${idBuku}/historiStok/${logKey}`] = {
+                        updates[`plate/${idBuku}/stok`] = stokSesudah;
+                        updates[`plate/${idBuku}/updatedAt`] = serverTimestamp();
+                        updates[`plate/${idBuku}/historiStok/${logKey}`] = {
                             timestamp: serverTimestamp(),
                             keterangan: `Penyesuaian/Retur Edit Invoice ${data.nomorInvoice}`,
                             refId: editTxKey,
@@ -381,21 +381,21 @@
                 updates[`transaksiJualBuku/${deleteTxKey}`] = null;
 
                 for (const item of itemsToReturn) {
-                    const buku = bukuList.find((b) => b.id === item.idBuku);
-                    if (!buku) {
-                        console.warn(`Buku ${item.idBuku} tidak ditemukan saat proses hapus/retur.`);
+                    const plate = plateList.find((b) => b.id === item.idBuku);
+                    if (!plate) {
+                        console.warn(`Plat ${item.idBuku} tidak ditemukan saat proses hapus/retur.`);
                         continue;
                     }
-                    const stokSebelum = Number(buku.stok || 0);
+                    const stokSebelum = Number(plate.stok || 0);
                     const perubahan = Math.abs(Number(item.jumlah || 0));
                     const stokSesudah = stokSebelum + perubahan;
 
-                    const histRef = ref(db, `buku/${item.idBuku}/historiStok`);
+                    const histRef = ref(db, `plate/${item.idBuku}/historiStok`);
                     const logKey = push(histRef).key;
 
-                    updates[`buku/${item.idBuku}/stok`] = stokSesudah;
-                    updates[`buku/${item.idBuku}/updatedAt`] = serverTimestamp();
-                    updates[`buku/${item.idBuku}/historiStok/${logKey}`] = {
+                    updates[`plate/${item.idBuku}/stok`] = stokSesudah;
+                    updates[`plate/${item.idBuku}/updatedAt`] = serverTimestamp();
+                    updates[`plate/${item.idBuku}/historiStok/${logKey}`] = {
                         timestamp: serverTimestamp(),
                         keterangan: `Retur Hapus Invoice ${initialTx.nomorInvoice || deleteTxKey}`,
                         refId: deleteTxKey,
@@ -495,7 +495,7 @@
                             <Input.TextArea rows={2} placeholder="Catatan untuk transaksi ini..." />
                         </Form.Item>
 
-                        <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>Item Buku</Typography.Title>
+                        <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>Item Plat</Typography.Title>
 
                         {/* --- Form.List Card --- */}
                         <Form.List name="items">
@@ -504,19 +504,19 @@
                                     {fields.map(({ key, name, ...restField }, index) => (
                                         <Card key={key} size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }} extra={ fields.length > 1 ? (<Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />) : null }>
                                             <Row gutter={16}>
-                                                {/* Kolom Buku */}
+                                                {/* Kolom Plat */}
                                                 <Col span={24}>
-                                                    <Form.Item {...restField} name={[name, 'idBuku']} rules={[{ required: true, message: 'Pilih buku' }]} label={`Item #${index + 1}: Buku`} style={{ marginBottom: 8 }}>
+                                                    <Form.Item {...restField} name={[name, 'idBuku']} rules={[{ required: true, message: 'Pilih plate' }]} label={`Item #${index + 1}: Plat`} style={{ marginBottom: 8 }}>
                                                         <Select
                                                             showSearch
-                                                            placeholder="Pilih Buku"
+                                                            placeholder="Pilih Plat"
                                                             onChange={(idBuku) => handleBukuChange(index, idBuku)}
                                                             filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())}
                                                             disabled={!selectedPelanggan || loadingDependencies} // Disable jika pelanggan belum dipilih atau data master loading
                                                             loading={loadingDependencies}
-                                                            notFoundContent={loadingDependencies ? <Spin size="small" /> : 'Data buku tidak ditemukan'}
+                                                            notFoundContent={loadingDependencies ? <Spin size="small" /> : 'Data plate tidak ditemukan'}
                                                         >
-                                                            {bukuList.map((b) => (<Option key={b.id} value={b.id}>{b.judul}</Option>))}
+                                                            {plateList.map((b) => (<Option key={b.id} value={b.id}>{b.judul}</Option>))}
                                                         </Select>
                                                     </Form.Item>
                                                 </Col>
@@ -532,7 +532,7 @@
                                         </Card>
                                     ))}
                                     <Form.Item>
-                                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan || (isGeneratingInvoice && mode === 'create') || loadingDependencies}>Tambah Item Buku</Button>
+                                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan || (isGeneratingInvoice && mode === 'create') || loadingDependencies}>Tambah Item Plat</Button>
                                         {!selectedPelanggan && ( <Text type="warning" style={{ display: 'block', marginTop: 8 }}> Pilih pelanggan terlebih dahulu untuk menambah item.</Text> )}
                                     </Form.Item>
                                 </>
@@ -554,7 +554,7 @@
                                     <>
                                         <Divider />
                                         <Row gutter={16}>
-                                            <Col xs={24} md={12} style={{ marginBottom: 16 }}><Card bordered={false} style={{ backgroundColor: '#fafafa' }}><Statistic title="Total Qty Buku" value={qty} /></Card></Col>
+                                            <Col xs={24} md={12} style={{ marginBottom: 16 }}><Card bordered={false} style={{ backgroundColor: '#fafafa' }}><Statistic title="Total Qty Plat" value={qty} /></Card></Col>
                                             <Col xs={24} md={12}><Card bordered={false} style={{ backgroundColor: '#fafafa' }}><Statistic title="Grand Total" value={total} formatter={rupiahFormatter} /></Card></Col>
                                         </Row>
                                         <Divider />

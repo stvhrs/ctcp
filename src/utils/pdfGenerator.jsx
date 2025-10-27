@@ -7,7 +7,7 @@ const companyInfo = {
     hp : "0882-0069-05391" 
 };
 
-const baseURL = 'https://aplikasimasiko.web.app/transaksijualbuku';
+const baseURL = 'https://aplikasimasiko.web.app/transaksijualplate';
 
 const formatCurrency = (value) =>
     new Intl.NumberFormat('id-ID', {
@@ -87,7 +87,7 @@ const buildDoc = (transaksi, type) => {
     currentY += 15; // Spasi sebelum tabel
 
     // --- TABEL ITEM ---
-    const head = [['No', 'Judul Buku', 'Qty', 'Harga', 'Diskon', 'Subtotal']];
+    const head = [['No', 'Judul Plat', 'Qty', 'Harga', 'Diskon', 'Subtotal']];
     let totalBuku = 0;
     const body = (transaksi.items || []).map((item, i) => {
         const qty = Number(item.jumlah || 0);
@@ -134,7 +134,7 @@ const buildDoc = (transaksi, type) => {
     // --- SUMMARY & TOTAL ---
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Buku:', margin.left, currentY);
+    doc.text('Total Plat:', margin.left, currentY);
     doc.setFont('helvetica', 'normal');
     doc.text(String(totalBuku), margin.left + 25, currentY);
 

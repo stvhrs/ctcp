@@ -54,7 +54,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
     const randomDaysAgo = Math.floor(Math.random() * 365);
     const tanggal = dayjs().subtract(randomDaysAgo, 'day').valueOf();
 
-    // 4. Generate Item Buku Acak
+    // 4. Generate Item Plat Acak
     const itemCount = getRandomInt(1, 5);
     const items = [];
     let totalTagihan = 0;
@@ -62,7 +62,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
 
     for (let i = 0; i < itemCount; i++) {
         const randomBookId = `BOOK-${getRandomInt(10000, 9999)}`;
-        const randomBookTitle = `Buku Acak Judul ${getRandomInt(1, 500)}`;
+        const randomBookTitle = `Plat Acak Judul ${getRandomInt(1, 500)}`;
         const hargaSatuan = getRandomInt(110000, 2100000);
         const diskonPersen = getRandomInt(0, 20);
         const jumlah = getRandomInt(1, 15);
@@ -72,7 +72,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
         items.push({ idBuku: randomBookId, judulBuku: randomBookTitle, jumlah, hargaSatuan, diskonPersen });
     }
      if (items.length === 0) { // Seharusnya tidak terjadi dengan logika di atas
-        throw new Error("Gagal membuat item buku acak.");
+        throw new Error("Gagal membuat item plate acak.");
     }
 
     // 5. Status Pembayaran Acak & Histori
@@ -244,8 +244,8 @@ function GJualPage() {
                 <Title level={4}>Generate Data Transaksi Penjualan Acak (Tanpa Relasi)</Title>
                 <Space direction="vertical" style={{ width: '100%' }} size="large">
                     <Paragraph>
-                        Fitur ini akan membuat 10.000 data transaksi penjualan buku acak
-                        dengan ID/nama buku dan pelanggan acak.
+                        Fitur ini akan membuat 10.000 data transaksi penjualan plate acak
+                        dengan ID/nama plate dan pelanggan acak.
                         Data akan disimpan ke Firebase RTDB di path <Text code>/transaksiJualBuku</Text>.
                         Nomor invoice akan digenerate berurutan.
                     </Paragraph>

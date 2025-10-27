@@ -52,7 +52,7 @@ export default function TransaksiJualPage() {
 
     // --- Data Global via Hooks ---
     const { data: allTransaksi, loading: loadingTransaksi } = useTransaksiJualData();
-    const { data: bukuList, loading: loadingBuku } = useBukuData(); // Ubah nama variabel jika perlu
+    const { data: plateList, loading: loadingBuku } = useBukuData(); // Ubah nama variabel jika perlu
     const { data: pelangganList, loading: loadingPelanggan } = usePelangganData(); // Ubah nama variabel jika perlu
     const loadingDependencies = loadingBuku || loadingPelanggan;
 
@@ -445,7 +445,7 @@ const renderAksi = useCallback((_, record) => {
                          onCancel={handleCloseFormModal}
                          mode={formMode}
                          initialTx={editingTx}
-                         bukuList={bukuList} // Pastikan bukuList terkirim
+                         plateList={plateList} // Pastikan plateList terkirim
                          pelangganList={pelangganList} // Pastikan pelangganList terkirim
                          onSuccess={handleFormSuccess}
                          loadingDependencies={loadingDependencies}

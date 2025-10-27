@@ -6,25 +6,25 @@ import useDebounce from '../../../hooks/useDebounce'; // Impor hook debounce
 const { Title, Text } = Typography;
 
 const StokHistoryTab = () => {
-    const { data: bukuList, loading: bukuLoading } = useBukuData(); 
+    const { data: plateList, loading: plateLoading } = useBukuData(); 
     
     const [searchText, setSearchText] = useState('');
     const debouncedSearchText = useDebounce(searchText, 300);
 
     const allHistory = useMemo(() => {
         const combinedHistory = [];
-        if (!bukuList || bukuList.length === 0) {
+        if (!plateList || plateList.length === 0) {
             return combinedHistory;
         }
 
-        bukuList.forEach(buku => {
-            if (buku.historiStok && typeof buku.historiStok === 'object') {
-                Object.keys(buku.historiStok).forEach(key => {
+        plateList.forEach(plate => {
+            if (plate.historiStok && typeof plate.historiStok === 'object') {
+                Object.keys(plate.historiStok).forEach(key => {
                     combinedHistory.push({
-                        id: `${buku.id}-${key}`, 
-                        ...buku.historiStok[key],
-                        judul: buku.historiStok[key].judul || buku.judul, 
-                        kode_buku: buku.historiStok[key].kode_buku || buku.kode_buku,
+                        id: `${plate.id}-${key}`, 
+                        ...plate.historiStok[key],
+                        judul: plate.historiStok[key].judul || plate.judul, 
+                        kode_plate: plate.historiStok[key].kode_plate || plate.kode_plate,
                     });
                 });
             }
@@ -32,14 +32,14 @@ const StokHistoryTab = () => {
 
         combinedHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         return combinedHistory.slice(0, 200); 
-    }, [bukuList]);
+    }, [plateList]);
 
     const filteredHistory = useMemo(() => {
         if (!debouncedSearchText) return allHistory;
         const lowerSearch = debouncedSearchText.toLowerCase();
         return allHistory.filter(item =>
             (item.judul || '').toLowerCase().includes(lowerSearch) ||
-            (item.kode_buku || '').toLowerCase().includes(lowerSearch) ||
+            (item.kode_plate || '').toLowerCase().includes(lowerSearch) ||
             (item.keterangan || '').toLowerCase().includes(lowerSearch)
         );
     }, [allHistory, debouncedSearchText]);
@@ -51,8 +51,8 @@ const StokHistoryTab = () => {
             width: 150,
             fixed: 'left',
         },
-        { title: 'Judul Buku', dataIndex: 'judul', key: 'judul', width: 250, fixed: 'left', },
-        { title: 'Kode', dataIndex: 'kode_buku', key: 'kode_buku', width: 120 },
+        { title: 'Judul Plat', dataIndex: 'judul', key: 'judul', width: 250, fixed: 'left', },
+        { title: 'Kode', dataIndex: 'kode_plate', key: 'kode_plate', width: 120 },
         {
             title: 'Perubahan', dataIndex: 'perubahan', key: 'perubahan',
             align: 'right', width: 100,
@@ -97,7 +97,7 @@ const StokHistoryTab = () => {
             <Table
                 columns={historyColumns}
                 dataSource={filteredHistory}
-                loading={bukuLoading} 
+                loading={plateLoading} 
                 rowKey="id"
                 size="small"
                 scroll={{ x: 1200, y: 'calc(100vh - 350px)' }}

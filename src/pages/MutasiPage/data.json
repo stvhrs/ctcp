@@ -1,5 +1,5 @@
 {
-  "buku": {
+  "plate": {
     "-Buku_A01": {
       "judul": "Belajar Firebase dari Nol",
       "stok": 90,
@@ -36,7 +36,7 @@
       "telepon": "08123456001"
     },
     "-Pelanggan_002": {
-      "nama": "Toko Buku Sahabat",
+      "nama": "Toko Plat Sahabat",
       "isSpesial": true,
       "telepon": "08123456002"
     }
@@ -46,7 +46,7 @@
       "nomorInvoice": "INV-DUMMY-001",
       "tanggal": 1760652100000,
       "idPelanggan": "-Pelanggan_002",
-      "namaPelanggan": "Toko Buku Sahabat",
+      "namaPelanggan": "Toko Plat Sahabat",
       "pelangganIsSpesial": true,
       "items": [
         {
@@ -65,7 +65,7 @@
           "idMutasi": "-Mutasi_001",
           "tanggalBayar": 1760652300000,
           "jumlahBayar": 500000,
-          "tipeMutasi": "Pembayaran Transaksi Buku"
+          "tipeMutasi": "Pembayaran Transaksi Plat"
         }
       ]
     }
@@ -98,7 +98,7 @@
       "tipeTransaksi": "jual",
       "jumlahBayar": 500000,
       "tanggalBayar": 1760652300000,
-      "tipeMutasi": "Pembayaran Transaksi Buku"
+      "tipeMutasi": "Pembayaran Transaksi Plat"
     }
   }
 }

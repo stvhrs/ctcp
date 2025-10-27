@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom'; // Tambahkan useNavigate
-import { Layout, ConfigProvider, Drawer, Grid, Typography, App as AntApp, Button, message } from 'antd'; // Tambahkan message
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { Layout, ConfigProvider, Drawer, Grid, Typography, App as AntApp, Button } from 'antd';
 import idID from 'antd/locale/id_ID';
 import 'dayjs/locale/id';
 import { CloseOutlined, LogoutOutlined } from '@ant-design/icons';
 
 // --- Context and Auth Components ---
-import { AuthProvider, useAuth } from './AuthContext'; // Sesuaikan path
-import ProtectedRoute from './ProtectedRoute'; // Sesuaikan path
+import { AuthProvider, useAuth } from './AuthContext';
+import ProtectedRoute from './ProtectedRoute';
 
 // --- Komponen Layout ---
 import SideMenu, { NavigationMenu } from './components/layout/SideMenu';
@@ -17,10 +17,7 @@ import MobileHeader from './components/layout/MobileHeader';
 import BukuPage from './pages/BukuPage/BukuPage';
 import MutasiPage from './pages/MutasiPage/MutasiPage';
 import TransaksiJualPage from './pages/TransaksiJualPage/TransaksiJualPage';
-// import DataGeneratorPage from './pages/DataGeneratorPage'; // Hapus jika tidak dipakai
 import PelangganPage from './pages/PelangganPage/PelangganPage';
-// import JsonUploader from './pages/excel'; // Hapus jika tidak dipakai
-// import DataGeneratorTransaksiJual from './pages/data'; // Hapus jika tidak dipakai
 import LoginPage from './pages/LoginPage/LoginPage';
 
 // --- Halaman Publik ---
@@ -28,21 +25,19 @@ import InvoicePublicPage from './pages/InvoicePublicPage';
 import NotaPublicPage from './pages/NotaPublicPage';
 
 // --- (BARU) Impor Halaman Generate ---
-// Pastikan Anda sudah membuat file-file ini atau ganti dengan impor yang benar
-import GBukuPage from './pages/GBukuPage'; // Contoh path
-import GMutasiPage from './pages/GMutasiPage'; // Contoh path
-import GJualPage from './pages/GJualPage'; // Contoh path
-
+import GBukuPage from './pages/GBukuPage';
+import GMutasiPage from './pages/GMutasiPage';
+import GJualPage from './pages/GJualPage';
 
 // Komponen MainLayout (Add Logout Button)
 const MainLayout = () => {
     const [collapsed, setCollapsed] = useState(false);
     const [drawerVisible, setDrawerVisible] = useState(false);
     const screens = Grid.useBreakpoint();
-    const location = useLocation();
+    const location = useLocation(); // OK, karena MainLayout akan dirender di dalam <BrowserRouter>
     const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
-    const { message: antdMessage } = AntApp.useApp(); // Gunakan hook antd App untuk message
+    const { message: antdMessage } = AntApp.useApp();
 
     const handleDrawerClose = () => setDrawerVisible(false);
     const handleMenuClick = () => setDrawerVisible(true);
@@ -51,8 +46,8 @@ const MainLayout = () => {
         try {
             await logout();
             console.log("Pengguna logout");
-            antdMessage.success("Logout berhasil."); // Notifikasi sukses
-            navigate('/login', { replace: true }); // Arahkan ke login
+            antdMessage.success("Logout berhasil.");
+            navigate('/login', { replace: true });
         } catch (error) {
             console.error("Gagal logout:", error);
             antdMessage.error("Gagal logout.");
@@ -62,20 +57,64 @@ const MainLayout = () => {
     // --- (UPDATE) getActiveKey ---
     const getActiveKey = () => {
         const path = location.pathname;
-         if (path.startsWith('/buku')) return '/buku';
-         if (path.startsWith('/mutasi')) return '/mutasi';
-         if (path.startsWith('/transaksi-jual')) return '/transaksi-jual';
-         if (path.startsWith('/pelanggan')) return '/pelanggan';
-         // Rute baru
-         if (path.startsWith('/gbuku')) return '/gbuku';
-         if (path.startsWith('/gmutasi')) return '/gmutasi';
-         if (path.startsWith('/gjual')) return '/gjual';
-         // Rute lama dihapus
-         // if (path.startsWith('/json')) return '/json';
-         // if (path.startsWith('/mutasi2')) return '/mutasi2';
-         // if (path.startsWith('/mutasi3')) return '/mutasi3';
+        if (path.startsWith('/plate')) return '/plate';
+        if (path.startsWith('/mutasi')) return '/mutasi';
+        if (path.startsWith('/transaksi-jual')) return '/transaksi-jual';
+        if (path.startsWith('/pelanggan')) return '/pelanggan';
+        if (path.startsWith('/gplate')) return '/gplate';
+        if (path.startsWith('/gmutasi')) return '/gmutasi';
+        if (path.startsWith('/gjual')) return '/gjual';
         return '/mutasi'; // Default
     };
+
+    // --- (BARU) useEffect untuk mengubah document.title ---
+    useEffect(() => {
+        let title = "Aplikasi Admin"; // Default title
+        const appName = "Sistem Admin Plat"; // Nama aplikasi untuk awalan
+
+        // Map path ke judul yang lebih deskriptif
+        switch (location.pathname) {
+            case '/plate':
+                title = `${appName} - Manajemen Plat`;
+                break;
+            case '/mutasi':
+                title = `${appName} - Mutasi Stok`;
+                break;
+            case '/transaksi-jual':
+                title = `${appName} - Transaksi Penjualan`;
+                break;
+            case '/pelanggan':
+                title = `${appName} - Data Pelanggan`;
+                break;
+            case '/gplate':
+                title = `${appName} - Generate Plat`;
+                break;
+            case '/gmutasi':
+                title = `${appName} - Generate Mutasi`;
+                break;
+            case '/gjual':
+                title = `${appName} - Generate Penjualan`;
+                break;
+            case '/login': // Login juga bisa diatur di sini
+                title = `${appName} - Login`;
+                break;
+            case '/':
+                title = `${appName} - Dashboard`; // Untuk rute default '/'
+                break;
+            // Untuk rute publik, gunakan pola Regex jika perlu
+            case location.pathname.match(/\/transaksijualplate\/invoice\/\w+/)?.[0]: // Sesuaikan regex jika ID bukan hanya angka
+                title = `${appName} - Detail Invoice`;
+                break;
+            case location.pathname.match(/\/transaksijualplate\/nota\/\w+/)?.[0]:
+                title = `${appName} - Detail Nota`;
+                break;
+            default:
+                title = `${appName} - Dashboard`; // Fallback jika tidak ada yang cocok
+                break;
+        }
+        document.title = title;
+    }, [location.pathname]);
+
 
     const contentMarginLeft = collapsed ? 80 : 240;
 
@@ -105,8 +144,8 @@ const MainLayout = () => {
                             icon={<LogoutOutlined />}
                             onClick={handleLogout}
                             style={{ width: '100%' }}
-                         >
-                            Logout ({currentUser?.email?.split('@')[0]}) {/* Tampilkan bagian email sblm @ */}
+                        >
+                            Logout ({currentUser?.email?.split('@')[0]})
                         </Button>
                     }
                     footerStyle={{ backgroundColor: '#001529', borderTop: '1px solid #1f1f1f', padding: '10px 16px' }}
@@ -114,74 +153,62 @@ const MainLayout = () => {
                     <NavigationMenu activeKey={getActiveKey()} onLinkClick={handleDrawerClose} />
                 </Drawer>
             )}
-            <Layout style={{
-                marginLeft: screens.lg ? contentMarginLeft : 0,
-                transition: 'margin-left 0.2s',
-                minHeight: '100vh',
-            }}>
+            <Layout
+                style={{
+                    marginLeft: screens.lg ? contentMarginLeft : 0,
+                    transition: 'margin-left 0.2s',
+                    minHeight: '100vh',
+                }}
+            >
                 {!screens.lg && <MobileHeader onMenuClick={handleMenuClick} />}
-
-                 {/* --- (UPDATE) Rute Internal --- */}
-                 <Routes>
-                      {/* Rute Internal Aplikasi */}
-                      <Route path="/buku" element={<BukuPage />} />
-                      <Route path="/mutasi" element={<MutasiPage/>} />
-                      <Route path="/transaksi-jual" element={<TransaksiJualPage />} />
-                      <Route path="/pelanggan" element={<PelangganPage />} />
-                      {/* Rute Baru */}
-                      <Route path="/gbuku" element={<GBukuPage />} />
-                      <Route path="/gmutasi" element={<GMutasiPage />} />
-                      <Route path="/gjual" element={<GJualPage />} />
-                      {/* Rute Lama Dihapus */}
-                      {/* <Route path="/json" element={<JsonUploader />} /> */}
-                      {/* <Route path="/mutasi2" element={<DataGeneratorPage />} /> */}
-                      {/* <Route path="/mutasi3" element={<DataGeneratorTransaksiJual />} /> */}
-
-                      {/* Rute Default Internal */}
-                      <Route path="/" element={<Navigate to="/mutasi" replace />} />
-                      {/* Catch-all opsional untuk mengarahkan rute internal yg tidak dikenal */}
-                      <Route path="*" element={<Navigate to="/mutasi" replace />} />
-                 </Routes>
-
-
+                {/* Routes untuk aplikasi utama */}
+                <Routes>
+                    <Route path="/plate" element={<BukuPage />} />
+                    <Route path="/mutasi" element={<MutasiPage />} />
+                    <Route path="/transaksi-jual" element={<TransaksiJualPage />} />
+                    <Route path="/pelanggan" element={<PelangganPage />} />
+                    <Route path="/gplate" element={<GBukuPage />} />
+                    <Route path="/gmutasi" element={<GMutasiPage />} />
+                    <Route path="/gjual" element={<GJualPage />} />
+                    <Route path="/" element={<Navigate to="/mutasi" replace />} />
+                    <Route path="*" element={<Navigate to="/mutasi" replace />} />
+                </Routes>
             </Layout>
         </Layout>
     );
 };
 
-// Pisahkan Router ke komponennya sendiri
+// Komponen AppRoutes sekarang tidak perlu useLocation
 const AppRoutes = () => {
     return (
-        <BrowserRouter>
-            <Routes>
-                {/* Rute Login */}
-                <Route path="/login" element={<LoginPage />} />
-
-                {/* Rute Publik */}
-                <Route path="/transaksijualbuku/invoice/:id" element={<InvoicePublicPage />} />
-                <Route path="/transaksijualbuku/nota/:id" element={<NotaPublicPage />} />
-
-                {/* Rute Internal yang Dilindungi */}
-                <Route
-                    path="/*" // Mencocokkan semua path lain (rute internal)
-                    element={
-                        <ProtectedRoute>
-                            <MainLayout />
-                        </ProtectedRoute>
-                    }
-                />
-            </Routes>
-        </BrowserRouter>
+        <Routes>
+            {/* Rute Login */}
+            <Route path="/login" element={<LoginPage />} />
+            {/* Rute Publik */}
+            <Route path="/transaksijualplate/invoice/:id" element={<InvoicePublicPage />} />
+            <Route path="/transaksijualplate/nota/:id" element={<NotaPublicPage />} />
+            {/* Rute Internal yang Dilindungi */}
+            <Route
+                path="/*" // Mencocokkan semua path lain (rute internal)
+                element={
+                    <ProtectedRoute>
+                        <MainLayout />
+                    </ProtectedRoute>
+                }
+            />
+        </Routes>
     );
 };
-
 
 const App = () => {
     return (
         <ConfigProvider locale={idID}>
-            <AntApp> {/* Konteks App Ant Design */}
-                <AuthProvider> {/* Konteks Autentikasi */}
-                    <AppRoutes /> {/* Router Utama */}
+            <AntApp>
+                <AuthProvider>
+                    {/* <BrowserRouter> DITEMPATKAN DI SINI */}
+                    <BrowserRouter>
+                        <AppRoutes /> {/* AppRoutes sekarang berada di dalam BrowserRouter */}
+                    </BrowserRouter>
                 </AuthProvider>
             </AntApp>
         </ConfigProvider>
@@ -189,4 +216,3 @@ const App = () => {
 };
 
 export default App;
-

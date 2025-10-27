@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, InputNumber, Row, Col, Grid, message, Spin, Alert, Typography, Table ,Button} from 'antd';
-// (PERUBAHAN) runTransaction sekarang di-apply ke 'bukuRef', bukan 'bukuStokRef'
+// (PERUBAHAN) runTransaction sekarang di-apply ke 'plateRef', bukan 'plateStokRef'
 import { ref, push, serverTimestamp, runTransaction, query, orderByChild, limitToLast, onValue } from 'firebase/database';
 import { db } from '../../../api/firebase'; // Hapus 'storage' jika tidak dipakai
 import { timestampFormatter, numberFormatter } from '../../../utils/formatters'; 
 const { Title, Text } = Typography;
 
-const StokFormModal = ({ open, onCancel, buku }) => {
+const StokFormModal = ({ open, onCancel, plate }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState([]);
@@ -21,10 +21,10 @@ const StokFormModal = ({ open, onCancel, buku }) => {
 
     // Effect untuk memuat riwayat stok (Tidak berubah)
     useEffect(() => {
-        if (open && buku?.id) {
+        if (open && plate?.id) {
             setHistoryLoading(true);
             const bookHistoryRef = query(
-                ref(db, `buku/${buku.id}/historiStok`),
+                ref(db, `plate/${plate.id}/historiStok`),
                 orderByChild('timestamp'),
                 limitToLast(20)
             );
@@ -36,8 +36,8 @@ const StokFormModal = ({ open, onCancel, buku }) => {
                 setHistory(loadedHistory);
                 setHistoryLoading(false);
             }, (error) => {
-                console.error("Gagal memuat riwayat buku:", error);
-                message.error("Gagal memuat riwayat buku.");
+                console.error("Gagal memuat riwayat plate:", error);
+                message.error("Gagal memuat riwayat plate.");
                 setHistoryLoading(false);
             });
 
@@ -45,9 +45,9 @@ const StokFormModal = ({ open, onCancel, buku }) => {
         } else {
             setHistory([]);
         }
-    }, [open, buku?.id]);
+    }, [open, plate?.id]);
 
-    if (!buku) return null;
+    if (!plate) return null;
 
     // --- (PERUBAHAN BESAR) handleStokUpdate dibuat Atomik ---
     const handleStokUpdate = async (values) => {
@@ -67,13 +67,13 @@ const StokFormModal = ({ open, onCancel, buku }) => {
         setLoading(true);
         try {
             // 1. Tentukan referensi ke node BUKU (bukan hanya stok)
-            const bukuRef = ref(db, `buku/${buku.id}`);
+            const plateRef = ref(db, `plate/${plate.id}`);
             
-            // 2. Jalankan Transaksi pada seluruh node buku
-            await runTransaction(bukuRef, (currentData) => {
-                // currentData adalah seluruh objek buku saat ini
+            // 2. Jalankan Transaksi pada seluruh node plate
+            await runTransaction(plateRef, (currentData) => {
+                // currentData adalah seluruh objek plate saat ini
                 if (!currentData) {
-                    // Buku tidak ada, batalkan transaksi
+                    // Plat tidak ada, batalkan transaksi
                     return; 
                 }
 
@@ -83,9 +83,9 @@ const StokFormModal = ({ open, onCancel, buku }) => {
 
                 // 4. Siapkan data histori (juga pakai data 'live')
                 const historyData = {
-                    bukuId: buku.id, // atau currentData.id jika ada
+                    plateId: plate.id, // atau currentData.id jika ada
                     judul: currentData.judul, // Gunakan data dari transaksi
-                    kode_buku: currentData.kode_buku, // Gunakan data dari transaksi
+                    kode_plate: currentData.kode_plate, // Gunakan data dari transaksi
                     perubahan: jumlahNum, // Ini adalah nama field yg benar
                     jumlah: jumlahNum, // (Redundant, tapi ada di kode Anda)
                     keterangan: keterangan || (jumlahNum > 0 ? 'Stok Masuk' : 'Stok Keluar'),
@@ -95,11 +95,11 @@ const StokFormModal = ({ open, onCancel, buku }) => {
                 };
                 
                 // 5. Buat key baru untuk node historiStok
-                const newHistoryKey = push(ref(db, `buku/${buku.id}/historiStok`)).key;
+                const newHistoryKey = push(ref(db, `plate/${plate.id}/historiStok`)).key;
 
-                // 6. Kembalikan data buku yang LENGKAP dan sudah di-update
+                // 6. Kembalikan data plate yang LENGKAP dan sudah di-update
                 return {
-                    ...currentData, // Data buku lama
+                    ...currentData, // Data plate lama
                     stok: stokSesudah, // Stok baru
                     updatedAt: serverTimestamp(), // (PERMINTAAN) Timestamp baru
                     historiStok: {
@@ -109,7 +109,7 @@ const StokFormModal = ({ open, onCancel, buku }) => {
                 };
             });
 
-            message.success(`Stok ${buku.judul} berhasil diperbarui.`);
+            message.success(`Stok ${plate.judul} berhasil diperbarui.`);
             onCancel(); // Tutup modal setelah sukses
 
         } catch (error) {
@@ -147,7 +147,7 @@ const StokFormModal = ({ open, onCancel, buku }) => {
 
     return (
         <Modal
-            title={`Update Stok: ${buku?.judul || '...'}`}
+            title={`Update Stok: ${plate?.judul || '...'}`}
             open={open}
             onCancel={onCancel}
             footer={null}
@@ -159,7 +159,7 @@ const StokFormModal = ({ open, onCancel, buku }) => {
                     {/* Kolom Formulir */}
                     <Col sm={10} xs={24}>
                         <Alert
-                            message={`Stok Saat Ini: ${numberFormatter(buku?.stok)}`}
+                            message={`Stok Saat Ini: ${numberFormatter(plate?.stok)}`}
                             type="info"
                             style={{ marginBottom: 16 }}
                         />
@@ -194,10 +194,10 @@ const StokFormModal = ({ open, onCancel, buku }) => {
                         </Form>
                     </Col>
 
-                    {/* Kolom Riwayat Stok Buku Ini */}
+                    {/* Kolom Riwayat Stok Plat Ini */}
                     <Col sm={14} xs={24}>
                         <Title level={5} style={{ marginTop: screens.xs ? 16 : 0, marginBottom: 16 }}>
-                            Riwayat Stok Buku Ini (20 Terbaru)
+                            Riwayat Stok Plat Ini (20 Terbaru)
                         </Title>
                         <Table
                             columns={modalHistoryColumns}

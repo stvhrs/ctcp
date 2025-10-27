@@ -31,7 +31,7 @@ const SubtotalDisplay = ({ index }) => (
 );
 
 
-const BulkRestockModal = ({ open, onClose, bukuList }) => {
+const BulkRestockModal = ({ open, onClose, plateList }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [selectedBookIdsInForm, setSelectedBookIdsInForm] = useState(new Set());
@@ -62,7 +62,7 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
 
             // Validasi
             if (validItems.length === 0) {
-                message.warning('Tambahkan setidaknya satu item buku yang valid.');
+                message.warning('Tambahkan setidaknya satu item plate yang valid.');
                 return;
             }
             const hasZeroQuantity = validItems.some(item => Number(item.quantity) === 0);
@@ -86,10 +86,10 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
 
             setLoading(true); // Loading dimulai di sini
 
-            // Proses update menggunakan transaksi atomik per buku (fungsi sama)
+            // Proses update menggunakan transaksi atomik per plate (fungsi sama)
             const updatePromises = booksToUpdate.map(async ({ bookId, quantity, specificRemark }) => {
                 const jumlahNum = quantity;
-                const bukuRef = ref(db, `buku/${bookId}`);
+                const plateRef = ref(db, `plate/${bookId}`);
 
                 // Siapkan keterangan gabungan
                 let keteranganGabungan = overallRemark;
@@ -100,11 +100,11 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
                      keteranganGabungan = jumlahNum > 0 ? 'Stok Masuk (Borongan)' : 'Stok Keluar (Borongan)';
                 }
 
-                // Jalankan transaksi pada node buku
-                return runTransaction(bukuRef, (currentData) => {
+                // Jalankan transaksi pada node plate
+                return runTransaction(plateRef, (currentData) => {
                     if (!currentData) {
-                        console.warn(`Buku dengan ID ${bookId} tidak ditemukan. Transaksi dibatalkan.`);
-                        return; // Batalkan jika buku tidak ada
+                        console.warn(`Plat dengan ID ${bookId} tidak ditemukan. Transaksi dibatalkan.`);
+                        return; // Batalkan jika plate tidak ada
                     }
 
                     // Hitung stok
@@ -113,9 +113,9 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
 
                     // Siapkan data histori
                     const historyData = {
-                        bukuId: bookId,
+                        plateId: bookId,
                         judul: currentData.judul,
-                        kode_buku: currentData.kode_buku,
+                        kode_plate: currentData.kode_plate,
                         perubahan: jumlahNum,
                         jumlah: jumlahNum, // Redundant? Dijaga untuk konsistensi jika dipakai di tempat lain
                         keterangan: keteranganGabungan,
@@ -125,9 +125,9 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
                     };
 
                     // Dapatkan key histori baru
-                    const newHistoryKey = push(ref(db, `buku/${bookId}/historiStok`)).key;
+                    const newHistoryKey = push(ref(db, `plate/${bookId}/historiStok`)).key;
 
-                    // Kembalikan data buku lengkap yang diperbarui
+                    // Kembalikan data plate lengkap yang diperbarui
                     return {
                         ...currentData,
                         stok: stokSesudah,
@@ -143,13 +143,13 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
             // Tunggu semua transaksi selesai
             await Promise.all(updatePromises);
 
-            message.success(`Stok untuk ${booksToUpdate.length} buku berhasil diperbarui.`);
+            message.success(`Stok untuk ${booksToUpdate.length} plate berhasil diperbarui.`);
             onClose(); // Tutup modal jika sukses
 
         } catch (error) { // Pesan error diubah ke Bahasa Indonesia
              console.error("Kesalahan Restock Borongan:", error);
              if (error.code && error.message) { message.error(`Gagal update stok: ${error.message} (Kode: ${error.code})`);}
-             else if (error.errorFields) { message.error("Periksa kembali input form. Pastikan semua buku dan jumlah terisi dengan benar.");}
+             else if (error.errorFields) { message.error("Periksa kembali input form. Pastikan semua plate dan jumlah terisi dengan benar.");}
              else { message.error("Terjadi kesalahan saat menyimpan data.");}
         } finally {
             setLoading(false); // Loading berhenti di sini
@@ -160,7 +160,7 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
     return (
         // Modal dan judul diubah ke Bahasa Indonesia
         <Modal
-            title="Restock Buku Borongan"
+            title="Restock Plat Borongan"
             open={open}
             onCancel={onClose}
             footer={null} // Footer dirender manual
@@ -171,7 +171,7 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
              <Spin spinning={loading} tip="Menyimpan perubahan stok...">
                  {/* Alert message diubah ke Bahasa Indonesia */}
                  <Alert
-                    message="Tambahkan buku satu per satu ke dalam daftar di bawah. Isi jumlah penambahan (+) atau pengurangan (-). Keterangan Umum akan ditambahkan ke setiap riwayat stok buku."
+                    message="Tambahkan plate satu per satu ke dalam daftar di bawah. Isi jumlah penambahan (+) atau pengurangan (-). Keterangan Umum akan ditambahkan ke setiap riwayat stok plate."
                     type="info" showIcon style={{ marginBottom: 16 }}
                 />
                 <Form
@@ -185,9 +185,9 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
                     </Form.Item>
 
                     {/* Judul diubah ke Bahasa Indonesia */}
-                    <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>Item Buku</Typography.Title>
+                    <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>Item Plat</Typography.Title>
 
-                    {/* --- Form.List Item Buku --- */}
+                    {/* --- Form.List Item Plat --- */}
                     <Form.List name="items">
                         {(fields, { add, remove }, { errors }) => (
                             <>
@@ -196,21 +196,21 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
                                         <Card key={key} size="small" style={{ marginBottom: 16, backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9f9f9' }}
                                             extra={fields.length > 0 ? (<Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />) : null}>
                                             <Row gutter={[16, 0]}>
-                                                {/* Kolom Pilih Buku */}
+                                                {/* Kolom Pilih Plat */}
                                                 <Col xs={24} md={10} lg={8}>
                                                     {/* Label Form.Item, placeholder, message, notFoundContent diubah ke Bahasa Indonesia */}
-                                                    <Form.Item {...restField} name={[name, 'bookId']} label={`Item #${index + 1}: Buku`} rules={[{ required: true, message: 'Pilih buku' }]} style={{ marginBottom: 8 }}>
+                                                    <Form.Item {...restField} name={[name, 'bookId']} label={`Item #${index + 1}: Plat`} rules={[{ required: true, message: 'Pilih plate' }]} style={{ marginBottom: 8 }}>
                                                         <Select
-                                                             showSearch placeholder="Cari & Pilih Buku..." optionFilterProp="children"
+                                                             showSearch placeholder="Cari & Pilih Plat..." optionFilterProp="children"
                                                              filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())}
                                                              filterSort={(optionA, optionB) => (optionA?.children?.toString() ?? '').toLowerCase().localeCompare((optionB?.children?.toString() ?? '').toLowerCase())}
-                                                             disabled={!bukuList || bukuList.length === 0}
-                                                             notFoundContent={!bukuList || bukuList.length === 0 ? <Spin size="small" /> : 'Buku tidak ditemukan'}
+                                                             disabled={!plateList || plateList.length === 0}
+                                                             notFoundContent={!plateList || plateList.length === 0 ? <Spin size="small" /> : 'Plat tidak ditemukan'}
                                                         >
-                                                            {bukuList?.map((buku) => (
+                                                            {plateList?.map((plate) => (
                                                                 // Text di Option diubah ke Bahasa Indonesia
-                                                                <Option key={buku.id} value={buku.id} disabled={selectedBookIdsInForm.has(buku.id) && form.getFieldValue(['items', name, 'bookId']) !== buku.id}>
-                                                                    {buku.judul} (Stok: {numberFormatter(buku.stok)})
+                                                                <Option key={plate.id} value={plate.id} disabled={selectedBookIdsInForm.has(plate.id) && form.getFieldValue(['items', name, 'bookId']) !== plate.id}>
+                                                                    {plate.judul} (Stok: {numberFormatter(plate.stok)})
                                                                 </Option>
                                                             ))}
                                                         </Select>
@@ -245,8 +245,8 @@ const BulkRestockModal = ({ open, onClose, bukuList }) => {
                                 </div>
                                 <Form.Item>
                                     {/* Teks Button diubah ke Bahasa Indonesia */}
-                                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!bukuList || bukuList.length === 0}>
-                                        Tambah Item Buku
+                                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!plateList || plateList.length === 0}>
+                                        Tambah Item Plat
                                     </Button>
                                     <Form.ErrorList errors={errors} />
                                 </Form.Item>

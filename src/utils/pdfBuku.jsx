@@ -33,26 +33,26 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     doc.line(14, 29, pageWidth - 14, 29); 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('Daftar Stok Buku', pageWidth / 2, 36, { align: 'center' });
+    doc.text('Daftar Stok Plat', pageWidth / 2, 36, { align: 'center' });
     // --- AKHIR HEADER ---
     
     // --- KOLOM & DATA TABEL (Tidak berubah) ---
     const tableColumn = [ /* ... kolom ... */ 
-        "No.", "Judul Buku", "Penerbit", "Stok", "Hrg. Z1", 
-        "Diskon", "Mapel", "Kelas", "Tipe Buku", "Spek", "Peruntukan"
+        "No.", "Judul Plat", "Penerbit", "Stok", "Hrg. Z1", 
+        "Diskon", "Mapel", "Kelas", "Tipe Plat", "Spek", "Peruntukan"
     ];
-    const tableRows = dataToExport.map((buku, index) => [ /* ... data ... */ 
+    const tableRows = dataToExport.map((plate, index) => [ /* ... data ... */ 
         index + 1, 
-        buku.judul || '-',
-        buku.penerbit || '-',
-        numberFormatter(buku.stok),
-        currencyFormatter(buku.hargaJual), 
-        percentFormatter(buku.diskonJual), 
-        buku.mapel || '-',
-        buku.kelas || '-',
-        buku.tipe_buku || '-',
-        buku.spek || '-',
-        buku.peruntukan || '-'
+        plate.judul || '-',
+        plate.penerbit || '-',
+        numberFormatter(plate.stok),
+        currencyFormatter(plate.hargaJual), 
+        percentFormatter(plate.diskonJual), 
+        plate.mapel || '-',
+        plate.kelas || '-',
+        plate.tipe_plate || '-',
+        plate.spek || '-',
+        plate.peruntukan || '-'
     ]);
     // --- AKHIR KOLOM & DATA ---
 
@@ -80,14 +80,14 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
         },
         columnStyles: { 
             0: { cellWidth: 7, halign: 'center' },   // No.
-            1: { cellWidth: "auto" },               // Judul Buku
+            1: { cellWidth: "auto" },               // Judul Plat
             2: { cellWidth: 12 },                   // Penerbit
             3: { cellWidth: 9, halign: 'right' },  // Stok
             4: { cellWidth: 18, halign: 'right' },  // Hrg. Z1
             5: { cellWidth: 10, halign: 'left' },  // Diskon
             6: { cellWidth: 36 },                   // Mapel
             7: { cellWidth: 9, halign: 'left' }, // Kelas
-            8: { cellWidth: 14 },                   // Tipe Buku
+            8: { cellWidth: 14 },                   // Tipe Plat
             9: { cellWidth: 11, halign: 'left' }, // Spek
             10: { cellWidth: 14 }                   // Peruntukan
         },

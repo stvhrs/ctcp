@@ -3,7 +3,7 @@
 // PERUBAHAN:
 // 1. Modal dibuat FULLSCREEN (width="100vw", style, bodyStyle) agar responsive.
 // 2. <Descriptions> dibuat responsive (column={{ xs: 1, sm: 2, ... }}).
-// 3. <Table> "Daftar Item Buku":
+// 3. <Table> "Daftar Item Plat":
 //    - Kolom "Harga Satuan" & "Diskon" disembunyikan di mobile (responsive: ['sm']).
 //    - Ditambahkan `scroll={{ x: 'max-content' }}` sebagai pengaman.
 // ================================
@@ -40,10 +40,10 @@ const formatTimestamp = (timestamp) => {
 };
 // -------------------------
 
-// --- Kolom untuk tabel item buku (DIUBAH AGAR RESPONSIVE) ---
+// --- Kolom untuk tabel item plate (DIUBAH AGAR RESPONSIVE) ---
 const itemColumns = [
     {
-        title: 'Judul Buku',
+        title: 'Judul Plat',
         dataIndex: 'judulBuku',
         key: 'judulBuku',
         // 'fixed: 'left'' bisa ditambahkan jika tabel sangat lebar
@@ -207,7 +207,7 @@ const TransaksiJualDetailModal = ({ open, onCancel, transaksi }) => {
             </div>
 
             {/* --- PERUBAHAN 3: Table Responsive --- */}
-            <Title level={5}>Daftar Item Buku</Title>
+            <Title level={5}>Daftar Item Plat</Title>
             <Table
                 columns={itemColumns}
                 dataSource={items || []} // Pengaman error "rawData.some"
@@ -216,7 +216,7 @@ const TransaksiJualDetailModal = ({ open, onCancel, transaksi }) => {
                 bordered
                 size="small"
                 // Tambahkan scroll={{ x: ... }} sebagai PENGAMAN
-                // jika judul buku terlalu panjang
+                // jika judul plate terlalu panjang
                 scroll={{ x: 'max-content' }}
             />
         </Modal>

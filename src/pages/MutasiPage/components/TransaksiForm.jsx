@@ -23,8 +23,8 @@ const TipeTransaksi = {
 };
 
 const KategoriPemasukan = {
-    'Penjualan Buku': 'Penjualan Buku',
-    'Jasa Cetak Buku': 'Jasa Cetak Buku',
+    'Penjualan Plat': 'Penjualan Plat',
+    'Jasa Cetak Plat': 'Jasa Cetak Plat',
     'Pemasukan Lain-lain': 'Pemasukan Lain-lain',
     'Penjualan Sisa Kertas': 'Penjualan Sisa Kertas',
 };
@@ -35,7 +35,7 @@ const KategoriPengeluaran = {
     'Pembelian Bahan Baku': 'Pembelian Bahan Baku',
     'Pengeluaran Lain-lain': 'Pengeluaran Lain-lain',
 };
-const INVOICE_PAYMENT_CATEGORIES = ['Penjualan Buku', 'Jasa Cetak Buku'];
+const INVOICE_PAYMENT_CATEGORIES = ['Penjualan Plat', 'Jasa Cetak Plat'];
 
 // ====================== UTILITIES ======================
 const currencyFormatter = (value) =>
@@ -66,10 +66,10 @@ const TransaksiForm = ({
 
     const payableInvoices = React.useMemo(() => {
         let list = [];
-        if (watchingKategori === 'Penjualan Buku') {
-            list = unpaidJual.map(tx => ({ ...tx, tipeTransaksi: "Penjualan Buku" }));
-        } else if (watchingKategori === 'Jasa Cetak Buku') {
-            list = unpaidCetak.map(tx => ({ ...tx, tipeTransaksi: 'Jasa Cetak Buku' }));
+        if (watchingKategori === 'Penjualan Plat') {
+            list = unpaidJual.map(tx => ({ ...tx, tipeTransaksi: "Penjualan Plat" }));
+        } else if (watchingKategori === 'Jasa Cetak Plat') {
+            list = unpaidCetak.map(tx => ({ ...tx, tipeTransaksi: 'Jasa Cetak Plat' }));
         }
         return list.filter(tx => tx.statusPembayaran !== 'Lunas');
     }, [watchingKategori, unpaidJual, unpaidCetak]);
@@ -200,7 +200,7 @@ const TransaksiForm = ({
             let dataToSave = {};
             let oldPaymentAmount = 0;
             let oldInvoiceId = null;
-            let oldInvoiceType = null; // 'Penjualan Buku' | 'Jasa Cetak Buku'
+            let oldInvoiceType = null; // 'Penjualan Plat' | 'Jasa Cetak Plat'
 
             if (isEditing) {
                 if (initialValues.idTransaksi) {
@@ -229,7 +229,7 @@ const TransaksiForm = ({
 
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
-                const invoiceDbPath = dataLain.tipeTransaksi === 'Penjualan Buku' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                const invoiceDbPath = dataLain.tipeTransaksi === 'Penjualan Plat' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
                 const invoiceRef = ref(db, `${invoiceDbPath}/${dataLain.idTransaksi}`);
                 const invoiceSnapshot = await get(invoiceRef);
                 if (!invoiceSnapshot.exists()) throw new Error("Invoice terkait tidak ditemukan!");
@@ -250,7 +250,7 @@ const TransaksiForm = ({
                         };
                     } else {
                         if (oldInvoiceId && oldInvoiceType) {
-                            const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Buku' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                            const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plat' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
                             const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                             const oldInvSnapshot = await get(oldInvoiceRef);
                             if (oldInvSnapshot.exists()) {
@@ -307,7 +307,7 @@ const TransaksiForm = ({
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
                 if (isEditing && oldInvoiceId && oldInvoiceType) {
-                    const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Buku' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                    const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plat' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
                     const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                     const oldInvSnapshot = await get(oldInvoiceRef);
                     if (oldInvSnapshot.exists()) {
@@ -354,7 +354,7 @@ const TransaksiForm = ({
 
                     if (initialValues.idTransaksi && initialValues.tipeTransaksi) {
                         const paymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
-                        const invoiceDbPath = initialValues.tipeTransaksi === 'Penjualan Buku'
+                        const invoiceDbPath = initialValues.tipeTransaksi === 'Penjualan Plat'
                             ? 'transaksiJualBuku'
                             : 'transaksiCetakBuku';
                         const invoiceRef = ref(db, `${invoiceDbPath}/${initialValues.idTransaksi}`);
