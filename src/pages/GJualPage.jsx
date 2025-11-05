@@ -54,7 +54,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
     const randomDaysAgo = Math.floor(Math.random() * 365);
     const tanggal = dayjs().subtract(randomDaysAgo, 'day').valueOf();
 
-    // 4. Generate Item Plat Acak
+    // 4. Generate Item Plate Acak
     const itemCount = getRandomInt(1, 5);
     const items = [];
     let totalTagihan = 0;
@@ -62,7 +62,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
 
     for (let i = 0; i < itemCount; i++) {
         const randomBookId = `BOOK-${getRandomInt(10000, 9999)}`;
-        const randomBookTitle = `Plat Acak Judul ${getRandomInt(1, 500)}`;
+        const randomBookTitle = `Plate Acak Judul ${getRandomInt(1, 500)}`;
         const hargaSatuan = getRandomInt(110000, 2100000);
         const diskonPersen = getRandomInt(0, 20);
         const jumlah = getRandomInt(1, 15);

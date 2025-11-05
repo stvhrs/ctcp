@@ -3,7 +3,7 @@ import { ref, onValue } from 'firebase/database';
 import { message } from 'antd';
 import { db } from '../api/firebase'; // Pastikan path ini benar
 
-let plateCache = [];
+let bukuCache = [];
 let listeners = [];
 let isInitialized = false;
 let isLoading = false;
@@ -11,7 +11,7 @@ let globalUnsubscribe = null;
 
 function notifyListeners() {
     listeners.forEach((listener) => {
-        listener(plateCache);
+        listener(bukuCache);
     });
 }
 
@@ -20,16 +20,16 @@ function initializeBukuListener() {
         return;
     }
     isLoading = true;
-    const plateRef = ref(db, 'plate');
+    const bukuRef = ref(db, 'plate');
 
     globalUnsubscribe = onValue(
-        plateRef,
+        bukuRef,
         (snapshot) => {
             const data = snapshot.val();
             const loadedBuku = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
             loadedBuku.sort((a, b) => (a.judul || '').localeCompare(b.judul || ''));
             
-            plateCache = loadedBuku;
+            bukuCache = loadedBuku;
             isInitialized = true;
             isLoading = false;
             notifyListeners();
@@ -37,7 +37,7 @@ function initializeBukuListener() {
         (error) => {
             console.error("Firebase error (plate global):", error);
             message.error("Gagal memuat data plate.");
-            plateCache = [];
+            bukuCache = [];
             isInitialized = true;
             isLoading = false;
             notifyListeners();
@@ -46,7 +46,7 @@ function initializeBukuListener() {
 }
 
 function useBukuData() {
-    const [data, setData] = useState(plateCache);
+    const [data, setData] = useState(bukuCache);
     const [loading, setLoading] = useState(!isInitialized);
 
     useEffect(() => {
@@ -57,7 +57,7 @@ function useBukuData() {
         listeners.push(setData);
 
         if (isInitialized) {
-            setData(plateCache);
+            setData(bukuCache);
             setLoading(false);
         }
 
@@ -66,7 +66,7 @@ function useBukuData() {
         };
     }, []);
 
-    return { data: plateCache, loading: loading && !isInitialized };
+    return { data: bukuCache, loading: loading && !isInitialized };
 }
 
 export default useBukuData;

@@ -25,7 +25,7 @@ const formatCellValue = (cellValue) => {
 /**
  * Mem-parsing satu OBJEK data dari JSON menjadi objek plate.
  * @param {Object} item - Objek data baris dari array JSON
- * @returns {Object|null} - Objek plateData yang sudah diproses, atau null jika baris tidak valid.
+ * @returns {Object|null} - Objek bukuData yang sudah diproses, atau null jika baris tidak valid.
 */
 const parseBookRow = (item) => {
   // Pastikan item adalah objek
@@ -122,7 +122,7 @@ const parseBookRow = (item) => {
   }
 
   // 4b. Spek
-  const spek = deptStr.includes("LKS") ? "LKS" : "Plat";
+  const spek = deptStr.includes("LKS") ? "LKS" : "Plate";
 
   // 4c. Jenjang
   if (groupStr === "UMUM") {
@@ -146,8 +146,8 @@ const parseBookRow = (item) => {
   const stokStr = formatCellValue(qtyRaw).replace(/,/g, '');
   const stok = parseInt(stokStr, 10) || 0;
 
-  // 4e. Tipe Plat (Sesuai Permintaan)
-  const tipe_plate = (penerbit.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
+  // 4e. Tipe Plate (Sesuai Permintaan)
+  const tipe_buku = (penerbit.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
 
   // --- 5. Buat Histori Stok Awal ---
   const historyRef = push(ref(db, 'plate/historiStok'));
@@ -170,7 +170,7 @@ const parseBookRow = (item) => {
   
   // --- 6. Buat Objek Data Final (Sesuai Permintaan) ---
   return {
-    kode_plate: kodeBuku,
+    kode_buku: kodeBuku,
     judul: judul,
     stok: stok,
     kelas: kelas,
@@ -182,7 +182,7 @@ const parseBookRow = (item) => {
     spek: spek,
     
     spek_kertas: spek, 
-    tipe_plate: tipe_plate, 
+    tipe_buku: tipe_buku, 
 
     hargaJual: 0,
     diskonJual: 0,
@@ -237,10 +237,10 @@ function GBukuPage() {
 
         for (let i = 0; i < jsonData.length; i++) {
           const item = jsonData[i];
-          const plateData = parseBookRow(item);
+          const bukuData = parseBookRow(item);
           
-          if (plateData) {
-            results.push(plateData);
+          if (bukuData) {
+            results.push(bukuData);
           } else {
             console.warn(`Skipping item index ${i}: Invalid or missing data.`, item);
             skippedCount++;
@@ -277,18 +277,18 @@ function GBukuPage() {
     const loadingKey = 'uploading';
     message.loading({ content: `Mengunggah ${processedData.length} data...`, key: loadingKey, duration: 0 });
     
-    const plateListRef = ref(db, 'plate');
+    const bukuListRef = ref(db, 'plate');
     let successCount = 0;
     let errorCount = 0;
 
     const uploadPromises = processedData.map(async (bookData) => {
       try {
-        const newBookRef = push(plateListRef);
+        const newBookRef = push(bukuListRef);
         await set(newBookRef, bookData);
         successCount++;
       } catch (error) {
         // <-- TYPO DIPERBAIKI (Karakter 'D' dihapus dan template literal diperbaiki)
-        console.error(`Gagal mengunggah plate kode ${bookData.kode_plate}:`, error); 
+        console.error(`Gagal mengunggah plate kode ${bookData.kode_buku}:`, error); 
         errorCount++;
       }
     });
@@ -346,7 +346,7 @@ IA   }
   // --- Render JSX (TYPO DIPERBAIKI) ---
   return (
     <div style={{ padding: '20px' }}>
-    <Typography.Title level={4}>Unggah Data Plat dari JSON ke Firebase</Typography.Title>
+    <Typography.Title level={4}>Unggah Data Plate dari JSON ke Firebase</Typography.Title>
     <Space direction="vertical" style={{ width: '100%' }} size="large">
         
         <Typography.Text>1. Tempelkan data JSON Anda di bawah:</Typography.Text>

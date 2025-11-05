@@ -3,7 +3,7 @@
 // PERUBAHAN:
 // 1. Modal dibuat FULLSCREEN (width="100vw", style, bodyStyle) agar responsive.
 // 2. <Descriptions> dibuat responsive (column={{ xs: 1, sm: 2, ... }}).
-// 3. <Table> "Daftar Item Plat":
+// 3. <Table> "Daftar Item Plate":
 //    - Kolom "Harga Satuan" & "Diskon" disembunyikan di mobile (responsive: ['sm']).
 //    - Ditambahkan `scroll={{ x: 'max-content' }}` sebagai pengaman.
 // ================================
@@ -43,7 +43,7 @@ const formatTimestamp = (timestamp) => {
 // --- Kolom untuk tabel item plate (DIUBAH AGAR RESPONSIVE) ---
 const itemColumns = [
     {
-        title: 'Judul Plat',
+        title: 'Judul Plate',
         dataIndex: 'judulBuku',
         key: 'judulBuku',
         // 'fixed: 'left'' bisa ditambahkan jika tabel sangat lebar
@@ -130,14 +130,13 @@ const TransaksiJualDetailModal = ({ open, onCancel, transaksi }) => {
     return (
         <Modal
             open={open}
-            onCancel={onCancel}
+            onCancel={onCancel} centered={true}
             title={`Detail Transaksi: ${nomorInvoice || ''}`}
             
             // --- PERUBAHAN 1: Modal Fullscreen ---
-            width="100vw"
-            style={{ top: 0, padding: 0, margin: 0, maxWidth: '100vw' }}
+            width="50vw"
+            style={{ top: 0, padding: 0, margin: 0, maxWidth: '50vw' }}
             // Body dibuat scrollable
-            bodyStyle={{ padding: '24px', height: 'calc(100vh - 55px - 53px)', overflowY: 'auto' }}
             
             footer={[
                 // Ganti <button> biasa menjadi <Button> Ant Design
@@ -207,7 +206,7 @@ const TransaksiJualDetailModal = ({ open, onCancel, transaksi }) => {
             </div>
 
             {/* --- PERUBAHAN 3: Table Responsive --- */}
-            <Title level={5}>Daftar Item Plat</Title>
+            <Title level={5}>Daftar Item Plate</Title>
             <Table
                 columns={itemColumns}
                 dataSource={items || []} // Pengaman error "rawData.some"

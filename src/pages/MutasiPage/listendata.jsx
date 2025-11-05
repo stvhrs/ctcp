@@ -20,8 +20,8 @@ function notifyPelangganListeners() { /* ... */ }
 function initializePelangganListener() { /* ... ensure snapshotToArrayWithId is used ... */ }
 export function usePelangganData() { /* ... existing hook ... */ }
 
-// --- Plat Singleton (Example - Add if not already done, ensure ID is included) ---
-// let plateCache = []; etc...
+// --- Plate Singleton (Example - Add if not already done, ensure ID is included) ---
+// let bukuCache = []; etc...
 // export function useBukuData() { /* ... similar logic ... */ }
 
 
