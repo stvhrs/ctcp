@@ -10,7 +10,7 @@ const snapshotToArray = (snapshot) => {
 };
 
 // =============================================================
-// --- Singleton RTDB Listener untuk 'transaksiJualBuku' ---
+// --- Singleton RTDB Listener untuk 'transaksiJualPlate' ---
 // =============================================================
 let txJualCache = [];
 let txJualListeners = [];
@@ -29,7 +29,7 @@ function initializeTxJualListener() {
     console.log("Initializing TransaksiJual listener..."); // Debug log
     txJualIsLoading = true; // Set loading saat inisialisasi
 
-    const txRef = ref(db, 'transaksiJualBuku');
+    const txRef = ref(db, 'transaksiJualPlate');
     txJualGlobalUnsubscribe = onValue(txRef, (snapshot) => {
         console.log("TransaksiJual data received."); // Debug log
         const data = snapshotToArray(snapshot);

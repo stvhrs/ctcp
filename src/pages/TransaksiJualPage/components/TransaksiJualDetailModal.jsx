@@ -44,8 +44,8 @@ const formatTimestamp = (timestamp) => {
 const itemColumns = [
     {
         title: 'Judul Plate',
-        dataIndex: 'judulBuku',
-        key: 'judulBuku',
+        dataIndex: 'ukuranBuku',
+        key: 'ukuranBuku',
         // 'fixed: 'left'' bisa ditambahkan jika tabel sangat lebar
         // fixed: 'left', 
     },
@@ -215,7 +215,7 @@ const TransaksiJualDetailModal = ({ open, onCancel, transaksi }) => {
                 bordered
                 size="small"
                 // Tambahkan scroll={{ x: ... }} sebagai PENGAMAN
-                // jika judul plate terlalu panjang
+                // jika ukuran plate terlalu panjang
                 scroll={{ x: 'max-content' }}
             />
         </Modal>

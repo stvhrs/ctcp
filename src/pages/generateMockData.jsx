@@ -26,8 +26,8 @@ const tipeBukuList = [
     "BTU", "BTP", "Non Teks", "Plate Guru ", "Umum", "LKS", "Jurnal",
 ];
 
-// Generate 13 nama penerbit secara otomatis
-const penerbitList = Array.from({ length: 13 }, (_, i) => `Penerbit ${String.fromCharCode(65 + i)} Press`); // Penerbit A Press, B Press, dst.
+// Generate 13 nama merek secara otomatis
+const merekList = Array.from({ length: 13 }, (_, i) => `Penerbit ${String.fromCharCode(65 + i)} Press`); // Penerbit A Press, B Press, dst.
 
 // --- AKHIR KONSTANTA DATA ---
 
@@ -61,10 +61,10 @@ export const generateBooks = (numBooks) => {
         }
 
         const tipeBuku = getRandomElement(tipeBukuList);
-        const penerbit = getRandomElement(penerbitList);
+        const merek = getRandomElement(merekList);
         
         // Buat Judul lebih deskriptif
-        const judul = `${tipeBuku} ${mapel} Kelas ${kelas} ${jenjang} - ${penerbit}`;
+        const ukuran = `${tipeBuku} ${mapel} Kelas ${kelas} ${jenjang} - ${merek}`;
 
         // --- Simulasi Histori Stok (Logika sama seperti sebelumnya) ---
         let currentStok = 0;
@@ -110,9 +110,9 @@ export const generateBooks = (numBooks) => {
 
         const book = {
             id: kodeBuku, 
-            kode_buku: kodeBuku,
-            judul: judul, // Judul baru yang deskriptif
-            penerbit: penerbit,
+            kode_plate: kodeBuku,
+            ukuran: ukuran, // Judul baru yang deskriptif
+            merek: merek,
             tipe_buku: tipeBuku, 
             jenjang: jenjang, // Tambahkan jenjang
             kelas: kelas,     // Tambahkan kelas

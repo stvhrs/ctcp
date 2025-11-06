@@ -1,13 +1,11 @@
 // src/utils/pdfGenerator.js
-import { numberFormatter, currencyFormatter, percentFormatter } from './formatters';
+import { numberFormatter, currencyFormatter } from './formatters'; // <-- percentFormatter dihapus
 
 // --- MODIFIKASI IMPORT ---
 import jsPDF from 'jspdf';
 // Hapus: import 'jspdf-autotable'; 
 import autoTable from 'jspdf-autotable'; // Import fungsi autoTable secara langsung
 // --- AKHIR MODIFIKASI ---
-
-// Pastikan Mock jsPDF sudah dihapus atau dikomentari semua jika library asli diinstal
 
 export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     const {
@@ -21,7 +19,7 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     let finalY = 0;
 
-    // --- HEADER PDF (Tidak berubah) ---
+    // --- HEADER PDF ---
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text(cvName, pageWidth / 2, 15, { align: 'center' });
@@ -33,32 +31,34 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     doc.line(14, 29, pageWidth - 14, 29); 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('Daftar Stok Plate', pageWidth / 2, 36, { align: 'center' });
+    doc.text('Daftar Stok Plate', pageWidth / 2, 36, { align: 'center' }); // <-- Judul sudah benar
     // --- AKHIR HEADER ---
     
-    // --- KOLOM & DATA TABEL (Tidak berubah) ---
-    const tableColumn = [ /* ... kolom ... */ 
-        "No.", "Judul Plate", "Penerbit", "       Stok", "                    Hrg. Z1", 
-        "Diskon", "Mapel", "Kelas", "Tipe Plate", "Spek", "Peruntukan"
+    // --- MODIFIKASI BESAR: KOLOM & DATA TABEL ---
+    // Kolom disesuaikan dengan data Plate
+    const tableColumn = [
+        "No.", 
+        "Kode Plate", 
+        "Ukuran Plate", 
+        "Merek Plate", 
+        "     Stok", // Padding untuk perataan kanan
+        "         Harga Plate" // Padding untuk perataan kanan
     ];
-    const tableRows = dataToExport.map((plate, index) => [ /* ... data ... */ 
+    
+    // Data mapping disesuaikan dengan data Plate
+    const tableRows = dataToExport.map((plate, index) => [
         index + 1, 
-        plate.judul || '-',
-        plate.penerbit || '-',
+        plate.kode_plate || '-',
+        plate.ukuran_plate || '-',
+        plate.merek_plate || '-', // <-- Menggunakan merek_plate
         numberFormatter(plate.stok),
-        currencyFormatter(plate.hargaJual), 
-        percentFormatter(plate.diskonJual), 
-        plate.mapel || '-',
-        plate.kelas || '-',
-        plate.tipe_buku || '-',
-        plate.spek || '-',
-        plate.peruntukan || '-'
+        currencyFormatter(plate.harga_plate) // <-- Menggunakan harga_plate
+        // <-- Kolom buku lainnya dihapus
     ]);
-    // --- AKHIR KOLOM & DATA ---
+    // --- AKHIR MODIFIKASI KOLOM & DATA ---
 
     // --- PENGATURAN TABEL autoTable (MODIFIED) ---
-    // Panggil autoTable sebagai fungsi, bukan metode dari doc
-    autoTable(doc, { // <-- PERUBAHAN DI SINI
+    autoTable(doc, { 
         head: [tableColumn],
         body: tableRows,
         startY: 42, 
@@ -67,48 +67,37 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
             fillColor: [230, 230, 230], 
             textColor: 30, 
             fontStyle: 'bold', 
-            halign: 'left', // <-- BARIS INI SUDAH DIHAPUS
-            fontSize: 5, 
+            // halign: 'left', // Dihapus untuk style per kolom
+            fontSize: 8, // Sedikit diperbesar agar mudah dibaca
             cellPadding: 1 
         },
         bodyStyles: { 
-            fontSize: 5, 
+            fontSize: 7, // Sedikit diperbesar agar mudah dibaca
             cellPadding: 1 
         },
         alternateRowStyles: {
             fillColor: [245, 245, 245] 
         },
+        // --- MODIFIKASI BESAR: Style Kolom disesuaikan (6 kolom) ---
         columnStyles: { 
-            0: { cellWidth: 7,  halign: 'left' },   // No.
-            1: { cellWidth: "auto", halign: 'left'},                // Judul Plate
-            2: { cellWidth: 12 , halign: 'left'},                     // Penerbit
-            3: { cellWidth: 9, halign: 'right' },  // Stok
-            4: { cellWidth: 18, halign: 'right'},  // Hrg. Z1
-            5: { cellWidth: 10,   halign: 'center'},   // Diskon
-            6: { cellWidth: "auto" , halign: 'left'},                 // Mapel
-            7: { cellWidth: 9,  halign: 'left' },  // Kelas
-            8: { cellWidth:"auto"  , halign: 'left'},                 // Tipe Plate
-            9: { cellWidth: 11, halign: 'left' }, // Spek
-            10: { cellWidth: 14 , halign: 'left'}                     // Peruntukan
+            0: { cellWidth: 7, halign: 'left' },   // No.
+            1: { cellWidth: "auto", halign: 'left'},  // Kode Plate
+            2: { cellWidth: "auto", halign: 'left'},  // Ukuran Plate
+            3: { cellWidth: "auto", halign: 'left'},  // Merek Plate
+            4: { cellWidth: 15, halign: 'right' }, // Stok
+            5: { cellWidth: 25, halign: 'right' }  // Harga Plate
         },
-        willDrawCell: function (data) {
-            if (data.column.dataKey === 1 ) { 
-                if (data.cell.raw && typeof data.cell.raw === 'string' && data.cell.raw.length > 45) { 
-                    data.cell.text = data.cell.raw.substring(0, 42) + '...';
-                }
-            }
-        },
+        // --- HAPUS: willDrawCell tidak diperlukan lagi ---
+        // willDrawCell: function (data) { ... },
+        
         didDrawPage: function (data) {
-            // Untuk mendapatkan posisi Y terakhir, kita perlu akses dari argumen autoTable
-            // atau menggunakan properti internal jika tersedia di versi ini
              try {
-                // @ts-ignore (Mengabaikan error type checking jika ada)
+                // @ts-ignore 
                 finalY = data.cursor.y; 
              } catch(e){
                 console.warn("Tidak bisa mendapatkan cursor.y dari didDrawPage");
-                // Fallback jika cursor tidak tersedia
                 // @ts-ignore 
-                finalY = doc.lastAutoTable?.finalY || 50; // Coba pakai lastAutoTable jika masih ada
+                finalY = doc.lastAutoTable?.finalY || 50; 
              }
         }
     });

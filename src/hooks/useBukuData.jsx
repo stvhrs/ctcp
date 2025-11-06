@@ -27,7 +27,7 @@ function initializeBukuListener() {
         (snapshot) => {
             const data = snapshot.val();
             const loadedBuku = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
-            loadedBuku.sort((a, b) => (a.judul || '').localeCompare(b.judul || ''));
+            loadedBuku.sort((a, b) => (a.ukuran || '').localeCompare(b.ukuran || ''));
             
             bukuCache = loadedBuku;
             isInitialized = true;

@@ -47,31 +47,31 @@ const parseBookRow = (item) => {
 
   // --- 2. Inisialisasi Variabel ---
   let kodeBuku = formatCellValue(kodeBukuRaw);
-  let judul = formatCellValue(namaBarangRaw);
-  let judul_untuk_diproses = formatCellValue(namaBarangRaw);
+  let ukuran = formatCellValue(namaBarangRaw);
+  let ukuran_untuk_diproses = formatCellValue(namaBarangRaw);
   let departemen = formatCellValue(departemenRaw);
-  let penerbit = "BSE"; // Default
+  let merek = "BSE"; // Default
   let tahun = null;
   let kelas = null;
   let mapel = null;
   let jenjang = null;
 
-  // --- 3. Proses Parsing & Cleaning (Menggunakan 'judul_untuk_diproses') ---
+  // --- 3. Proses Parsing & Cleaning (Menggunakan 'ukuran_untuk_diproses') ---
   const groupStr = formatCellValue(groupRaw).toUpperCase();
   const deptStr = departemen.toUpperCase();
 
   // 3a. Ekstrak Penerbit
-  const penerbitMatch = judul_untuk_diproses.match(/\(([^)]+)\)/);
-  if (penerbitMatch && penerbitMatch[1]) {
-    penerbit = penerbitMatch[1].trim().toLowerCase();
-    judul_untuk_diproses = judul_untuk_diproses.replace(penerbitMatch[0], '').trim();
+  const merekMatch = ukuran_untuk_diproses.match(/\(([^)]+)\)/);
+  if (merekMatch && merekMatch[1]) {
+    merek = merekMatch[1].trim().toLowerCase();
+    ukuran_untuk_diproses = ukuran_untuk_diproses.replace(merekMatch[0], '').trim();
   }
 
   // 3b. Cek Revisi
-  const revisiMatch = judul_untuk_diproses.match(/\(\s*REVISI\s*\)/i);
+  const revisiMatch = ukuran_untuk_diproses.match(/\(\s*REVISI\s*\)/i);
   if (revisiMatch) {
     tahun = "revisi";
-    judul_untuk_diproses = judul_untuk_diproses.replace(revisiMatch[0], '').trim();
+    ukuran_untuk_diproses = ukuran_untuk_diproses.replace(revisiMatch[0], '').trim();
   }
 
   // 3c. Ekstrak Kelas
@@ -92,14 +92,14 @@ const parseBookRow = (item) => {
   }
 
   // 3d. Hapus sisa "KELAS..." dari Judul
-  const sisaKelasDiJudulMatch = judul_untuk_diproses.match(/\.?\s*KELAS\s+([IVXLCDM\w\s]+)$/i);
+  const sisaKelasDiJudulMatch = ukuran_untuk_diproses.match(/\.?\s*KELAS\s+([IVXLCDM\w\s]+)$/i);
   if (sisaKelasDiJudulMatch) {
-      judul_untuk_diproses = judul_untuk_diproses.substring(0, sisaKelasDiJudulMatch.index).trim();
+      ukuran_untuk_diproses = ukuran_untuk_diproses.substring(0, sisaKelasDiJudulMatch.index).trim();
   }
-  judul_untuk_diproses = judul_untuk_diproses.replace(/[\s.]+$/, '').trim();
+  ukuran_untuk_diproses = ukuran_untuk_diproses.replace(/[\s.]+$/, '').trim();
 
   // 3e. Tebak Mapel
-  const potentialMapel = judul_untuk_diproses.split('.')[0].split(' - ')[0].split(' SMT ')[0];
+  const potentialMapel = ukuran_untuk_diproses.split('.')[0].split(' - ')[0].split(' SMT ')[0];
   if (!potentialMapel.match(/^T\.\d+$/i) && !potentialMapel.match(/^TEMA\s+\d+/i)) {
     let cleanedMapel = potentialMapel.trim();
     cleanedMapel = cleanedMapel.replace(/\s+(\d+|[IVX]+)$/i, '').trim();
@@ -147,7 +147,7 @@ const parseBookRow = (item) => {
   const stok = parseInt(stokStr, 10) || 0;
 
   // 4e. Tipe Plate (Sesuai Permintaan)
-  const tipe_buku = (penerbit.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
+  const tipe_buku = (merek.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
 
   // --- 5. Buat Histori Stok Awal ---
   const historyRef = push(ref(db, 'plate/historiStok'));
@@ -170,13 +170,13 @@ const parseBookRow = (item) => {
   
   // --- 6. Buat Objek Data Final (Sesuai Permintaan) ---
   return {
-    kode_buku: kodeBuku,
-    judul: judul,
+    kode_plate: kodeBuku,
+    ukuran: ukuran,
     stok: stok,
     kelas: kelas,
     peruntukan: peruntukan,
     jenjang: jenjang,
-    penerbit: penerbit,
+    merek: merek,
     mapel: mapel,
     tahun: tahun,
     spek: spek,
@@ -288,7 +288,7 @@ function GBukuPage() {
         successCount++;
       } catch (error) {
         // <-- TYPO DIPERBAIKI (Karakter 'D' dihapus dan template literal diperbaiki)
-        console.error(`Gagal mengunggah plate kode ${bookData.kode_buku}:`, error); 
+        console.error(`Gagal mengunggah plate kode ${bookData.kode_plate}:`, error); 
         errorCount++;
       }
     });

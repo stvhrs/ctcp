@@ -29,7 +29,7 @@ const StokFormModal = ({ open, onCancel, plate }) => {
             // 2. Filter berdasarkan 'bukuId' yang sama dengan plate.id (ID asli plate)
             const bookHistoryRef = query(
                 ref(db, 'historiStok'),
-                orderByChild('bukuId'),
+                orderByChild('id'),
                 equalTo(plate.id) // <-- Memfilter berdasarkan ID asli plate
             );
 
@@ -97,10 +97,10 @@ const StokFormModal = ({ open, onCancel, plate }) => {
             
             // (PERUBAHAN DISINI)
             const historyData = {
-                bukuId: plate.id, // <-- DISIMPAN: ID unik plate (misal: -Oabc...)
-                judul: plate.judul || 'N/A',
-                kode_buku: plate.kode_buku || 'N/A', // <-- DISIMPAN: Kode plate (misal: "2256")
-                penerbit: plate.penerbit || 'N/A',
+                id: plate.id, // <-- DISIMPAN: ID unik plate (misal: -Oabc...)
+                ukuran_plate: plate.ukuran_plate || 'N/A',
+                kode_plate: plate.kode_plate || 'N/A', // <-- DISIMPAN: Kode plate (misal: "2256")
+                merek_plate: plate.merek_plate || 'N/A',
                 perubahan: jumlahNum,
                 stokSebelum: stokSebelum,
                 stokSesudah: stokSesudah,
@@ -110,7 +110,7 @@ const StokFormModal = ({ open, onCancel, plate }) => {
 
             await set(newHistoryRef, historyData);
 
-            message.success(`Stok ${plate.judul} berhasil diperbarui.`);
+            message.success(`Stok ${plate.ukuran} berhasil diperbarui.`);
             onCancel();
 
         } catch (error) {
@@ -148,7 +148,7 @@ const StokFormModal = ({ open, onCancel, plate }) => {
 
     return (
         <Modal
-            title={`Update Stok: ${plate?.judul || '...'}`}
+            title={`Update Stok: ${plate?.ukuran || '...'}`}
             open={open}
             onCancel={onCancel}
             footer={null}

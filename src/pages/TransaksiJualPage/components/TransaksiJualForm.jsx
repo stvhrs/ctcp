@@ -1,9 +1,10 @@
 // ================================
 // FILE: src/pages/transaksi-jual/components/TransaksiJualForm.jsx
-// - MODIFIKASI: bukuList disortir berdasarkan updatedAt (terbaru dulu)
-// - MODIFIKASI: Dropdown list disederhanakan menjadi "Judul (Penerbit)"
-// - MODIFIKASI: historiStok disimpan ke path root '/historiStok'
-// - MODIFIKASI: Tambah field diskonLain, biayaTentu, dan tampilan Total Diskon
+// - MODIFIKASI TOTAL: Diubah dari "Buku" menjadi "Plate"
+// - Menggunakan `plateList` prop
+// - Menggunakan `harga_plate` sebagai harga satuan
+// - Menyesuaikan dropdown & data yang disimpan
+// - Menyesuaikan penulisan historiStok ke schema 'plate'
 // ================================
 
 import React, { useEffect, useState } from 'react';
@@ -23,7 +24,7 @@ import dayjs from 'dayjs';
 const { Option } = Select;
 const { Text } = Typography;
 
-// ... (Helper rupiahFormatter dan rupiahParser tetap sama) ...
+// Helper rupiahFormatter dan rupiahParser tetap sama
 const rupiahFormatter = (v) =>
     new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -43,17 +44,15 @@ export default function TransaksiJualForm({
     onCancel,
     mode = 'create',
     initialTx = null,
-    bukuList = [],      // <-- Pastikan prop ini terisi array plate
-    pelangganList = [], // <-- Pastikan prop ini terisi array pelanggan
+    plateList = [],     // <-- MODIFIKASI: Prop diubah menjadi plateList
+    pelangganList = [],
     onSuccess,
-    loadingDependencies // <-- Prop untuk status loading data master
+    loadingDependencies // Prop untuk status loading data master
 }) {
     const [form] = Form.useForm();
     const [isSaving, setIsSaving] = useState(false);
     const [selectedPelanggan, setSelectedPelanggan] = useState(null);
     const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(mode === 'create');
-
-    // ... (useEffect, getHargaOtomatis, handlePelangganChange, handleBukuChange, handleDelete, SubtotalField tetap sama) ...
 
     // ===== Prefill saat EDIT =====
     useEffect(() => {
@@ -66,7 +65,7 @@ export default function TransaksiJualForm({
                     setSelectedPelanggan(p);
                     const itemsToSet = (initialTx.items && Array.isArray(initialTx.items))
                         ? initialTx.items.map((it) => ({
-                            idBuku: it.idBuku,
+                            idPlate: it.idPlate, // <-- MODIFIKASI: idBuku -> idPlate
                             jumlah: it.jumlah,
                             hargaSatuan: it.hargaSatuan,
                             diskonPersen: it.diskonPersen || 0
@@ -79,8 +78,8 @@ export default function TransaksiJualForm({
                         idPelanggan: initialTx.idPelanggan,
                         daerah: initialTx.daerah || '',
                         keterangan: initialTx.keterangan || '',
-                        diskonLain: initialTx.diskonLain || 0,  // <--- TAMBAHAN
-                        biayaTentu: initialTx.biayaTentu || 0,  // <--- TAMBAHAN
+                        diskonLain: initialTx.diskonLain || 0,
+                        biayaTentu: initialTx.biayaTentu || 0,
                         items: itemsToSet,
                     });
                     console.log("Data form edit berhasil dimuat.");
@@ -95,19 +94,19 @@ export default function TransaksiJualForm({
                 form.setFieldsValue({
                     tanggal: dayjs(),
                     items: [{}],
-                    diskonLain: 0, // <--- TAMBAHAN
-                    biayaTentu: 0  // <--- TAMBAHAN
+                    diskonLain: 0,
+                    biayaTentu: 0
                 });
                 setSelectedPelanggan(null); // Reset pelanggan terpilih
                 setIsGeneratingInvoice(true); // Pastikan flag generate aktif
-                // Nomor invoice akan digenerate oleh effect lain
             }
         }
-    }, [mode, initialTx, pelangganList, form, onCancel, open]); // Tambahkan 'open'
+    }, [mode, initialTx, pelangganList, form, onCancel, open]);
 
     // ===== Generate nomor invoice saat CREATE =====
     useEffect(() => {
-        // ... (Fungsi ini tidak berubah) ...
+        // ... (Fungsi ini tidak berubah, path 'transaksiJualPlate' bisa tetap dipakai atau diganti) ...
+        // SAYA ASUMSIKAN PATH TETAP 'transaksiJualPlate' UNTUK KONSISTENSI
         if (mode !== 'create' || !open || !isGeneratingInvoice) return;
         let isMounted = true;
         const generateInvoiceNumber = async () => {
@@ -116,7 +115,8 @@ export default function TransaksiJualForm({
                 const year = now.format('YYYY');
                 const month = now.format('MM');
                 const keyPrefix = `INV-${year}-${month}-`;
-                const txRef = ref(db, 'transaksiJualBuku');
+                // JIKA ANDA INGIN PINDAH PATH, GANTI 'transaksiJualPlate' DI BAWAH INI
+                const txRef = ref(db, 'transaksiJualPlate'); 
                 const qy = query(txRef, orderByKey(), startAt(keyPrefix), endAt(keyPrefix + '\uf8ff'));
                 const snapshot = await get(qy);
                 let nextNum = 1;
@@ -157,63 +157,51 @@ export default function TransaksiJualForm({
     }, [mode, open, isGeneratingInvoice]);
 
 
-    // ===== Helper harga otomatis (memperhitungkan zona jika ada) =====
-    const getHargaOtomatis = (idBuku, pelanggan) => {
-        // ... (Fungsi ini tidak berubah) ...
-        const plate = bukuList.find((b) => b.id === idBuku);
+    // ===== MODIFIKASI: Helper harga otomatis (disederhanakan untuk plate) =====
+    const getHargaOtomatis = (idPlate, pelanggan) => {
+        const plate = plateList.find((p) => p.id === idPlate);
         if (!plate) return { hargaSatuan: 0, diskonPersen: 0 };
-        const isSpesial = pelanggan?.isSpesial || false;
-        const zonaPelanggan = pelanggan?.zona;
-        const hargaZonaKey = zonaPelanggan ? `harga_zona_${zonaPelanggan}` : null;
-        let hargaJualBuku = Number(plate.hargaJual) || 0;
-        if (hargaZonaKey && plate[hargaZonaKey] !== undefined && plate[hargaZonaKey] !== null) {
-            hargaJualBuku = Number(plate[hargaZonaKey]) || hargaJualBuku;
-        }
-        let finalHargaSatuan = isSpesial
-            ? (Number(plate.hargaJualSpesial) || hargaJualBuku)
-            : hargaJualBuku;
-        let finalDiskonPersen = isSpesial
-            ? (Number(plate.diskonJualSpesial) || 0)
-            : (Number(plate.diskonJual) || 0);
+
+        // Logika disederhanakan: Ambil harga_plate.
+        // Logika zona/spesial dihilangkan karena data plate tidak mendukungnya.
+        const hargaSatuan = Number(plate.harga_plate) || 0;
+
         return {
-            hargaSatuan: finalHargaSatuan,
-            diskonPersen: finalDiskonPersen,
+            hargaSatuan: hargaSatuan,
+            diskonPersen: 0, // Default diskon 0, bisa diubah manual per item
         };
     };
 
 
     // ===== Handler ganti pelanggan/plate =====
     const handlePelangganChange = (idPelanggan) => {
-        // ... (Fungsi ini tidak berubah) ...
         const pel = pelangganList.find((p) => p.id === idPelanggan) || null;
         setSelectedPelanggan(pel);
         const items = form.getFieldValue('items') || [];
         const newItems = items.map((item) => {
-            if (!item || !item.idBuku) return item;
-            const { hargaSatuan, diskonPersen } = getHargaOtomatis(item.idBuku, pel);
+            if (!item || !item.idPlate) return item; // <-- MODIFIKASI: idBuku -> idPlate
+            const { hargaSatuan, diskonPersen } = getHargaOtomatis(item.idPlate, pel); // <-- MODIFIKASI
             return { ...item, hargaSatuan, diskonPersen };
         });
         form.setFieldsValue({ items: newItems });
     };
 
-    const handleBukuChange = (index, idBuku) => {
-        // ... (Fungsi ini tidak berubah) ...
-        const { hargaSatuan, diskonPersen } = getHargaOtomatis(idBuku, selectedPelanggan);
+    // <-- MODIFIKASI: Ganti nama fungsi
+    const handlePlateChange = (index, idPlate) => {
+        const { hargaSatuan, diskonPersen } = getHargaOtomatis(idPlate, selectedPelanggan);
         const items = form.getFieldValue('items') || [];
-        items[index] = { ...(items[index] || {}), idBuku, hargaSatuan, diskonPersen };
+        items[index] = { ...(items[index] || {}), idPlate, hargaSatuan, diskonPersen }; // <-- MODIFIKASI: idBuku -> idPlate
         form.setFieldsValue({ items: [...items] });
     };
 
-    // ===== Submit (Logika mode EDIT diubah drastis, Validasi Stok Dihapus) =====
+    // ===== Submit (Logika disesuaikan untuk Plate) =====
     const handleFinish = async (values) => {
         console.log("Form disubmit dengan data:", values);
         setIsSaving(true);
         message.loading({ content: 'Menyimpan Transaksi...', key: 'tx', duration: 0 });
         try {
-            // <--- MODIFIKASI: Ambil diskonLain dan biayaTentu ---
             const { idPelanggan, items, diskonLain, biayaTentu, ...data } = values;
 
-            // <--- TAMBAHAN: Parse nilai diskon/biaya ---
             const nominalDiskonLain = Number(diskonLain || 0);
             const nominalBiayaTentu = Number(biayaTentu || 0);
 
@@ -227,18 +215,23 @@ export default function TransaksiJualForm({
                 : `INV-${parts[1]}-${parts[2]}-${parts[3]}`;
 
 
-            if (!items || items.length === 0 || items.some(item => !item || !item.idBuku)) {
+            // <-- MODIFIKASI: Validasi item plate
+            if (!items || items.length === 0 || items.some(item => !item || !item.idPlate)) {
                 throw new Error('Transaksi harus memiliki minimal 1 item plate yang valid.');
             }
             const pelanggan = pelangganList.find((p) => p.id === idPelanggan);
             if (!pelanggan) throw new Error('Pelanggan tidak valid.');
 
-            let totalTagihan = 0; // Ini akan jadi subtotal item
+            let totalTagihan = 0;
             let totalQty = 0;
             const processedItems = items.map((item, index) => {
-                if (!item || !item.idBuku || item.jumlah == null || item.hargaSatuan == null) { throw new Error(`Data item #${index + 1} tidak lengkap.`); }
-                const plate = bukuList.find((b) => b.id === item.idBuku);
-                if (!plate) throw new Error(`Plate ${item.idBuku} (item #${index + 1}) tidak ditemukan`);
+                // <-- MODIFIKASI: Cek idPlate
+                if (!item || !item.idPlate || item.jumlah == null || item.hargaSatuan == null) { throw new Error(`Data item #${index + 1} tidak lengkap.`); }
+                
+                // <-- MODIFIKASI: Cari di plateList
+                const plate = plateList.find((p) => p.id === item.idPlate); 
+                if (!plate) throw new Error(`Plate ${item.idPlate} (item #${index + 1}) tidak ditemukan`);
+                
                 const hargaSatuan = Number(item.hargaSatuan);
                 const diskonPersen = Number(item.diskonPersen || 0);
                 const jumlah = Number(item.jumlah);
@@ -246,20 +239,19 @@ export default function TransaksiJualForm({
 
                 const hargaFinal = Math.round(hargaSatuan * (1 - diskonPersen / 100) * jumlah);
                 totalQty += jumlah;
-                totalTagihan += hargaFinal; // Akumulasi subtotal item
-                // Simpan data plate lengkap untuk histori
+                totalTagihan += hargaFinal;
+                
+                // <-- MODIFIKASI: Simpan data plate
                 return {
-                    idBuku: item.idBuku,
-                    judulBuku: plate.judul,
+                    idPlate: item.idPlate,
+                    namaPlate: `${plate.ukuran_plate} (${plate.merek_plate})`, // Judul gabungan
                     jumlah,
                     hargaSatuan,
                     diskonPersen,
-                    _bukuData: plate // <- Simpan data plate mentah untuk log histori
+                    _plateData: plate // <- Simpan data plate mentah untuk log histori
                 };
             });
 
-            // <--- MODIFIKASI: Hitung Grand Total final ---
-            // totalTagihan saat ini adalah subtotal item
             const finalTotalTagihan = totalTagihan - nominalDiskonLain + nominalBiayaTentu;
 
 
@@ -267,9 +259,9 @@ export default function TransaksiJualForm({
                 throw new Error("Tanggal transaksi tidak valid.");
             }
             
-            // Bersihkan _bukuData sebelum simpan ke 'transaksiJualBuku'
+            // <-- MODIFIKASI: Bersihkan _plateData
             const cleanProcessedItems = processedItems.map(item => {
-                const { _bukuData, ...rest } = item;
+                const { _plateData, ...rest } = item;
                 return rest;
             });
 
@@ -278,24 +270,26 @@ export default function TransaksiJualForm({
                 tanggal: data.tanggal.valueOf(),
                 idPelanggan,
                 namaPelanggan: pelanggan.nama,
-                telepon: pelanggan.telepon || '', // Ambil telepon
+                telepon: pelanggan.telepon || '',
                 pelangganIsSpesial: pelanggan.isSpesial || false,
-                items: cleanProcessedItems,
-                totalTagihan: finalTotalTagihan, // <--- MODIFIKASI (Gunakan grand total final)
+                items: cleanProcessedItems, // <-- Data item bersih
+                totalTagihan: finalTotalTagihan,
                 totalQty,
                 daerah: data.daerah || '',
                 keterangan: data.keterangan || '',
-                diskonLain: nominalDiskonLain, // <--- TAMBAHAN
-                biayaTentu: nominalBiayaTentu, // <--- TAMBAHAN
+                diskonLain: nominalDiskonLain,
+                biayaTentu: nominalBiayaTentu,
             };
 
             console.log("Mempersiapkan data simpan:", { txKey, baseTx });
 
             const updates = {};
+            const txPath = 'transaksiJualPlate'; // GANTI INI jika path diganti
+            const platePath = 'plate'; // GANTI INI jika path data plate berbeda
+            const historiPath = 'historiStok'; // GANTI INI jika path histori berbeda
 
             if (mode === 'create') {
-                // ... (Logika Create tidak berubah, baseTx sudah terupdate) ...
-                updates[`transaksiJualBuku/${txKey}`] = {
+                updates[`${txPath}/${txKey}`] = {
                     ...baseTx,
                     jumlahTerbayar: 0,
                     statusPembayaran: 'Belum Bayar',
@@ -304,23 +298,23 @@ export default function TransaksiJualForm({
                     updatedAt: serverTimestamp()
                 };
 
-                // Update Stok (Mode Create - Tanpa validasi negatif)
+                // Update Stok (Mode Create)
                 for (const item of processedItems) {
-                    const plate = item._bukuData;
+                    const plate = item._plateData;
                     const stokSebelum = Number(plate?.stok || 0);
                     const perubahan = -Math.abs(Number(item.jumlah));
                     const stokSesudah = stokSebelum + perubahan;
                     
-                    updates[`plate/${item.idBuku}/stok`] = stokSesudah;
-                    updates[`plate/${item.idBuku}/updatedAt`] = serverTimestamp();
+                    updates[`${platePath}/${item.idPlate}/stok`] = stokSesudah;
+                    updates[`${platePath}/${item.idPlate}/updatedAt`] = serverTimestamp();
 
                     // --- (HISTORI STOK CREATE) ---
-                    const logKey = push(ref(db, 'historiStok')).key;
-                    updates[`historiStok/${logKey}`] = {
-                        bukuId: plate.id,
-                        judul: plate.judul,
-                        kode_buku: plate.kode_buku,
-                        penerbit: plate.penerbit || 'N/A',
+                    const logKey = push(ref(db, historiPath)).key;
+                    updates[`${historiPath}/${logKey}`] = {
+                        plateId: plate.id, // <-- MODIFIKASI
+                        ukuran: `${plate.ukuran_plate} (${plate.merek_plate})`, // <-- MODIFIKASI
+                        kode_plate: plate.kode_plate || 'N/A', // <-- MODIFIKASI
+                        merek: plate.merek_plate || 'N/A', // <-- MODIFIKASI
                         perubahan,
                         stokSebelum,
                         stokSesudah,
@@ -330,55 +324,57 @@ export default function TransaksiJualForm({
                     };
                 }
             } else { // EDIT MODE
-                // ... (Logika Edit tidak berubah, baseTx sudah terupdate) ...
                 if (!initialTx?.id) throw new Error("ID transaksi edit tidak ditemukan.");
                 const editTxKey = initialTx.id;
                 const originalItems = initialTx.items || [];
 
-                updates[`transaksiJualBuku/${editTxKey}`] = {
+                updates[`${txPath}/${editTxKey}`] = {
                     ...initialTx,
-                    ...baseTx, // <-- Timpa dengan data baru (termasuk diskonLain, dll)
+                    ...baseTx,
                     updatedAt: serverTimestamp()
                 };
 
                 const stockChanges = new Map();
 
+                // <-- MODIFIKASI: Gunakan idPlate
                 originalItems.forEach(item => {
-                    const currentDelta = stockChanges.get(item.idBuku) || 0;
-                    stockChanges.set(item.idBuku, currentDelta + Number(item.jumlah || 0));
+                    const currentDelta = stockChanges.get(item.idPlate) || 0;
+                    stockChanges.set(item.idPlate, currentDelta + Number(item.jumlah || 0));
                 });
 
+                // <-- MODIFIKASI: Gunakan idPlate
                 processedItems.forEach(item => {
-                    const currentDelta = stockChanges.get(item.idBuku) || 0;
-                    stockChanges.set(item.idBuku, currentDelta - Number(item.jumlah || 0));
+                    const currentDelta = stockChanges.get(item.idPlate) || 0;
+                    stockChanges.set(item.idPlate, currentDelta - Number(item.jumlah || 0));
                 });
 
                 console.log("Perhitungan perubahan stok (delta):", Object.fromEntries(stockChanges));
 
-                for (const [idBuku, deltaQty] of stockChanges.entries()) {
+                // <-- MODIFIKASI: Gunakan idPlate
+                for (const [idPlate, deltaQty] of stockChanges.entries()) {
                     if (deltaQty === 0) continue;
-                    let plate = processedItems.find(it => it.idBuku === idBuku)?._bukuData;
+                    let plate = processedItems.find(it => it.idPlate === idPlate)?._plateData;
                     if (!plate) {
-                        plate = bukuList.find((b) => b.id === idBuku);
+                        plate = plateList.find((p) => p.id === idPlate);
                     }
                     if (!plate) {
-                        console.warn(`Plate dengan ID ${idBuku} tidak ditemukan saat penyesuaian stok edit.`);
+                        console.warn(`Plate dengan ID ${idPlate} tidak ditemukan saat penyesuaian stok edit.`);
                         continue;
                     }
                     const stokSebelum = Number(plate.stok || 0);
                     const perubahan = deltaQty;
                     const stokSesudah = stokSebelum + perubahan;
 
-                    updates[`plate/${idBuku}/stok`] = stokSesudah;
-                    updates[`plate/${idBuku}/updatedAt`] = serverTimestamp();
+                    updates[`${platePath}/${idPlate}/stok`] = stokSesudah;
+                    updates[`${platePath}/${idPlate}/updatedAt`] = serverTimestamp();
 
                     // --- (HISTORI STOK EDIT) ---
-                    const logKey = push(ref(db, 'historiStok')).key;
-                    updates[`historiStok/${logKey}`] = {
-                        bukuId: plate.id,
-                        judul: plate.judul,
-                        kode_buku: plate.kode_buku,
-                        penerbit: plate.penerbit || 'N/A',
+                    const logKey = push(ref(db, historiPath)).key;
+                    updates[`${historiPath}/${logKey}`] = {
+                        plateId: plate.id, // <-- MODIFIKASI
+                        ukuran: `${plate.ukuran_plate} (${plate.merek_plate})`, // <-- MODIFIKASI
+                        kode_plate: plate.kode_plate || 'N/A', // <-- MODIFIKASI
+                        merek: plate.merek_plate || 'N/A', // <-- MODIFIKASI
                         perubahan,
                         stokSebelum,
                         stokSesudah,
@@ -407,34 +403,40 @@ export default function TransaksiJualForm({
 
     // ===== Delete (Edit only) =====
     const handleDelete = async () => {
-        // ... (Fungsi ini tidak berubah) ...
         if (mode !== 'edit' || !initialTx?.id) return;
         setIsSaving(true);
         message.loading({ content: 'Menghapus transaksi & mengembalikan stok...', key: 'del_tx', duration: 0 });
+        
+        const txPath = 'transaksiJualPlate'; // GANTI INI jika path diganti
+        const platePath = 'plate'; // GANTI INI jika path data plate berbeda
+        const historiPath = 'historiStok'; // GANTI INI jika path histori berbeda
+
         try {
             const deleteTxKey = initialTx.id;
             const itemsToReturn = initialTx.items || [];
             const updates = {};
-            updates[`transaksiJualBuku/${deleteTxKey}`] = null;
+            updates[`${txPath}/${deleteTxKey}`] = null;
+            
             for (const item of itemsToReturn) {
-                const plate = bukuList.find((b) => b.id === item.idBuku);
+                // <-- MODIFIKASI: Cari di plateList
+                const plate = plateList.find((p) => p.id === item.idPlate); 
                 if (!plate) {
-                    console.warn(`Plate ${item.idBuku} tidak ditemukan saat proses hapus/retur.`);
+                    console.warn(`Plate ${item.idPlate} tidak ditemukan saat proses hapus/retur.`);
                     continue;
                 }
                 const stokSebelum = Number(plate.stok || 0);
                 const perubahan = Math.abs(Number(item.jumlah || 0));
                 const stokSesudah = stokSebelum + perubahan;
-                updates[`plate/${item.idBuku}/stok`] = stokSesudah;
-                updates[`plate/${item.idBuku}/updatedAt`] = serverTimestamp();
+                updates[`${platePath}/${item.idPlate}/stok`] = stokSesudah;
+                updates[`${platePath}/${item.idPlate}/updatedAt`] = serverTimestamp();
 
                 // --- (HISTORI STOK DELETE) ---
-                const logKey = push(ref(db, 'historiStok')).key;
-                updates[`historiStok/${logKey}`] = {
-                    bukuId: plate.id,
-                    judul: plate.judul,
-                    kode_buku: plate.kode_buku,
-                    penerbit: plate.penerbit || 'N/A',
+                const logKey = push(ref(db, historiPath)).key;
+                updates[`${historiPath}/${logKey}`] = {
+                    plateId: plate.id, // <-- MODIFIKASI
+                    ukuran: `${plate.ukuran_plate} (${plate.merek_plate})`, // <-- MODIFIKASI
+                    kode_plate: plate.kode_plate || 'N/A', // <-- MODIFIKASI
+                    merek: plate.merek_plate || 'N/A', // <-- MODIFIKASI
                     perubahan,
                     stokSebelum,
                     stokSesudah,
@@ -489,9 +491,9 @@ export default function TransaksiJualForm({
             open={open}
             onCancel={onCancel}
             width={800}
-            confirmLoading={isSaving} // <-- Loading state for OK button
+            confirmLoading={isSaving}
             destroyOnClose
-            footer={null} // Manual footer rendering
+            footer={null}
             maskClosable={false}
         >
             <Spin spinning={loadingDependencies} tip="Memuat data master...">
@@ -499,7 +501,7 @@ export default function TransaksiJualForm({
                     form={form}
                     layout="vertical"
                     onFinish={handleFinish}
-                    initialValues={{ tanggal: dayjs(), items: [{}], diskonLain: 0, biayaTentu: 0 }} // <--- MODIFIKASI initialValues
+                    initialValues={{ tanggal: dayjs(), items: [{}], diskonLain: 0, biayaTentu: 0 }}
                 >
                     {/* --- Header Form Responsive --- */}
                     <Row gutter={16}>
@@ -522,7 +524,7 @@ export default function TransaksiJualForm({
                             placeholder="Pilih pelanggan"
                             onChange={handlePelangganChange}
                             filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase()) }
-                            disabled={(isGeneratingInvoice && mode === 'create')} // Disable saat generate invoice saja
+                            disabled={(isGeneratingInvoice && mode === 'create')}
                             loading={loadingDependencies}
                             notFoundContent={loadingDependencies ? <Spin size="small" /> : 'Data pelanggan tidak ditemukan'}
                         >
@@ -530,7 +532,6 @@ export default function TransaksiJualForm({
                         </Select>
                     </Form.Item>
 
-                    {/* // <-- Field Daerah --> */}
                     <Form.Item name="daerah" label="Daerah (Opsional)">
                         <Input placeholder="cth: Sragen, Solo, Jakarta" />
                     </Form.Item>
@@ -546,37 +547,42 @@ export default function TransaksiJualForm({
                         {(fields, { add, remove }) => (
                             <>
                                 {fields.map(({ key, name, ...restField }, index) => {
-                                    // ... (Logika sorting plate list tidak berubah) ...
-                                    const sortedBukuList = [...bukuList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                                    // <-- MODIFIKASI: Urutkan plateList
+                                    const sortedPlateList = [...plateList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                                     return (
                                         <Card key={key} size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }} extra={ fields.length > 1 ? (<Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />) : null }>
                                             <Row gutter={16}>
                                                 {/* Kolom Plate */}
                                                 <Col span={24}>
-                                                    <Form.Item {...restField} name={[name, 'idBuku']} rules={[{ required: true, message: 'Pilih plate' }]} label={`Item #${index + 1}: Plate`} style={{ marginBottom: 8 }}>
+                                                    {/* <-- MODIFIKASI: name [name, 'idPlate'] */}
+                                                    <Form.Item {...restField} name={[name, 'idPlate']} rules={[{ required: true, message: 'Pilih plate' }]} label={`Item #${index + 1}: Plate`} style={{ marginBottom: 8 }}>
                                                         <Select
                                                             showSearch
                                                             placeholder="Pilih Plate"
-                                                            onChange={(idBuku) => handleBukuChange(index, idBuku)}
+                                                            // <-- MODIFIKASI: panggil handlePlateChange
+                                                            onChange={(idPlate) => handlePlateChange(index, idPlate)}
                                                             filterOption={(input, option) =>
-                                                                (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())
+                                                                (option?.label?.toString() ?? '').toLowerCase().includes(input.toLowerCase())
                                                             }
                                                             optionLabelProp="label"
                                                             disabled={!selectedPelanggan || loadingDependencies}
                                                             loading={loadingDependencies}
                                                             notFoundContent={loadingDependencies ? <Spin size="small" /> : 'Data plate tidak ditemukan'}
                                                         >
-                                                            {sortedBukuList.map((b) => (
+                                                            {/* <-- MODIFIKASI: Loop sortedPlateList */}
+                                                            {sortedPlateList.map((p) => (
                                                                 <Option
-                                                                    key={b.id}
-                                                                    value={b.id}
-                                                                    label={`${b.judul} (${b.penerbit || '?'})`}
+                                                                    key={p.id}
+                                                                    value={p.id}
+                                                                    // <-- MODIFIKASI: Label untuk search
+                                                                    label={`${p.ukuran_plate} (${p.merek_plate}) ${p.kode_plate}`}
                                                                 >
+                                                                    {/* <-- MODIFIKASI: Tampilan dropdown */}
                                                                     <div>
-                                                                        <Text strong>{b.judul}</Text>
+                                                                        <Text strong>{p.ukuran_plate} ({p.merek_plate})</Text>
                                                                         <br />
                                                                         <Text type="secondary" style={{ fontSize: '0.85em' }}>
-                                                                            ({b.penerbit || '?'}) | {b.mapel || '?'} | Kelas {b.kelas || '?'} | {b.tipe_buku || '?'} | Stok: {b.stok ?? 0}
+                                                                            Kode: {p.kode_plate || '?'} | Stok: {p.stok ?? 0}
                                                                         </Text>
                                                                     </div>
                                                                 </Option>
@@ -597,7 +603,9 @@ export default function TransaksiJualForm({
                                     )
                                 })}
                                 <Form.Item>
-                                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan || (isGeneratingInvoice && mode === 'create') || loadingDependencies}>Tambah Item Plate</Button>
+                                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan || (isGeneratingInvoice && mode === 'create') || loadingDependencies}>
+                                        Tambah Item Plate {/* <-- MODIFIKASI: Teks tombol */}
+                                    </Button>
 
                                     {!selectedPelanggan && ( <Text type="warning" style={{ display: 'block', marginTop: 8 }}> Pilih pelanggan terlebih dahulu untuk menambah item.</Text> )}
                                 </Form.Item>
@@ -606,7 +614,7 @@ export default function TransaksiJualForm({
                     </Form.List>
 
 
-                    {/* <--- TAMBAHAN: Field Diskon Lain dan Biaya Tentu --- */}
+                    {/* --- Field Diskon Lain dan Biaya Tentu (Tidak berubah) --- */}
                     <Row gutter={16} style={{ marginTop: 16 }}>
                         <Col xs={24} md={12}>
                             <Form.Item name="diskonLain" label="Diskon Tambahan (Nominal)" initialValue={0}>
@@ -629,13 +637,11 @@ export default function TransaksiJualForm({
                             </Form.Item>
                         </Col>
                     </Row>
-                    {/* --- AKHIR TAMBAHAN --- */}
 
 
-                    {/* --- GRAND TOTAL --- */}
+                    {/* --- GRAND TOTAL (Tidak berubah) --- */}
                     <Form.Item
                         noStyle
-                        // <--- MODIFIKASI: Update juga jika diskonLain atau biayaTentu berubah
                         shouldUpdate={(prev, cur) =>
                             JSON.stringify(prev.items || []) !== JSON.stringify(cur.items || []) ||
                             prev.diskonLain !== cur.diskonLain ||
@@ -644,11 +650,9 @@ export default function TransaksiJualForm({
                     >
                         {({ getFieldValue }) => {
                             const items = getFieldValue('items') || [];
-                            // <--- TAMBAHAN: Ambil nilai diskon/biaya
                             const diskonLain = Number(getFieldValue('diskonLain') || 0);
                             const biayaTentu = Number(getFieldValue('biayaTentu') || 0);
 
-                            // <--- MODIFIKASI: Hitung total diskon item
                             let subtotalItems = 0;
                             let totalItemDiskon = 0;
                             let qty = 0;
@@ -669,24 +673,21 @@ export default function TransaksiJualForm({
                                 }
                             });
                             
-                            // <--- MODIFIKASI: Hitung total diskon dan grand total ---
                             const finalTotalDiskon = totalItemDiskon + diskonLain;
                             const finalGrandTotal = subtotalItems - diskonLain + biayaTentu;
 
                             return (
                                 <>
                                     <Divider />
-                                    {/* <--- MODIFIKASI: Layout 3 kolom --- */}
                                     <Row gutter={16}>
                                         <Col xs={24} md={8} style={{ marginBottom: 16 }}>
+                                            {/* <-- MODIFIKASI: Judul statistic */}
                                             <Card bordered={false} style={{ backgroundColor: '#fafafa' }}><Statistic title="Total Qty Plate" value={qty} /></Card>
                                         </Col>
                                         <Col xs={24} md={8} style={{ marginBottom: 16 }}>
-                                            {/* <--- TAMBAHAN: Tampilan Total Diskon --- */}
                                             <Card bordered={false} style={{ backgroundColor: '#fffbe6' }}><Statistic title="Total Diskon" value={finalTotalDiskon} formatter={rupiahFormatter} valueStyle={{ color: '#d46b08' }} /></Card>
                                         </Col>
                                         <Col xs={24} md={8}>
-                                            {/* <--- MODIFIKASI: Tampilan Grand Total --- */}
                                             <Card bordered={false} style={{ backgroundColor: '#f6ffed' }}><Statistic title="Grand Total" value={finalGrandTotal} formatter={rupiahFormatter} valueStyle={{ color: '#389e0d' }} /></Card>
                                         </Col>
                                     </Row>
@@ -696,7 +697,7 @@ export default function TransaksiJualForm({
                         }}
                     </Form.Item>
 
-                    {/* --- Tombol Aksi di dalam Modal Footer --- */}
+                    {/* --- Tombol Aksi di dalam Modal Footer (Tidak berubah) --- */}
                     <Row justify="space-between" style={{ marginTop: 24 }}>
                         <Col>
                             {mode === 'edit' && (

@@ -132,7 +132,7 @@ const buildDoc = (transaksi, type) => {
         subtotalNet += item_subtotal_net; // Akumulasi total net (untuk perhitungan diskon)
         
         // --- MODIFIKASI: Tampilkan harga dan subtotal BRUTO (sebelum diskon) ---
-        return [i + 1, item.judulBuku || '-', qty, formatNumber(hs_bruto), formatNumber(item_subtotal_bruto)];
+        return [i + 1, item.ukuranBuku || '-', qty, formatNumber(hs_bruto), formatNumber(item_subtotal_bruto)];
     });
 
     autoTable(doc, {

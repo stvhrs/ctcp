@@ -66,8 +66,8 @@ export default function GenerateBukuChart() {
       for (let i = 0; i < booksData.length; i += BATCH_SIZE) {
         const batch = booksData.slice(i, i + BATCH_SIZE);
         const batchData = batch.reduce((acc, book) => {
-          // Tetap gunakan kode_buku atau ID sebagai key unik
-          acc[book.kode_buku] = book; 
+          // Tetap gunakan kode_plate atau ID sebagai key unik
+          acc[book.kode_plate] = book; 
           return acc;
         }, {});
 

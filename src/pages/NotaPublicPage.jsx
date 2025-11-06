@@ -34,7 +34,7 @@ const NotaPublicPage = () => {
             setLoading(true);
             setError(null);
             try {
-                const txRef = ref(db, `transaksiJualBuku/${id}`);
+                const txRef = ref(db, `transaksiJualPlate/${id}`);
                 const snapshot = await get(txRef);
                 
                 if (snapshot.exists()) {

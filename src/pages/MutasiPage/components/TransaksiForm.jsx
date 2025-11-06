@@ -17,25 +17,30 @@ const { Text } = Typography;
 const { Option } = Select;
 
 // ====================== CONSTANTS ======================
-const TipeTransaksi = {
-    pemasukan: 'pemasukan',
-    pengeluaran: 'pengeluaran',
+
+export const TipeTransaksi = {
+  pemasukan: 'pemasukan',
+  pengeluaran: 'pengeluaran',
 };
 
-const KategoriPemasukan = {
-    'Penjualan Plate': 'Penjualan Plate',
-    'Pemasukan Lain-lain': 'Pemasukan Lain-lain',
-    'Penjualan Sisa Kertas': 'Penjualan Sisa Kertas',
+export const KategoriPemasukan = {
+  penjualan_plate: "Penjualan Plate",
+  penjualan_sisa_palte: "Penjualan Sisa Plate",
+  pemasukan_lain: "Pemasukan Lain-lain",
+
 };
 
-const KategoriPengeluaran = {
-    komisi: "Komisi",
+export const KategoriPengeluaran = {
+
+  gum:"Gum",
+  developer:'Developer',
 
   gaji_produksi: "Gaji Karyawan",
   operasional: "Operasional",
 
   pengeluaran_lain: "Pengeluaran Lain-lain",
 };
+
 const INVOICE_PAYMENT_CATEGORIES = ['Penjualan Plate', ];
 
 // ====================== UTILITIES ======================
@@ -230,7 +235,7 @@ const TransaksiForm = ({
 
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
-                const invoiceDbPath = dataLain.tipeTransaksi === 'Penjualan Plate' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                const invoiceDbPath = dataLain.tipeTransaksi === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
                 const invoiceRef = ref(db, `${invoiceDbPath}/${dataLain.idTransaksi}`);
                 const invoiceSnapshot = await get(invoiceRef);
                 if (!invoiceSnapshot.exists()) throw new Error("Invoice terkait tidak ditemukan!");
@@ -251,7 +256,7 @@ const TransaksiForm = ({
                         };
                     } else {
                         if (oldInvoiceId && oldInvoiceType) {
-                            const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                            const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
                             const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                             const oldInvSnapshot = await get(oldInvoiceRef);
                             if (oldInvSnapshot.exists()) {
@@ -308,7 +313,7 @@ const TransaksiForm = ({
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
                 if (isEditing && oldInvoiceId && oldInvoiceType) {
-                    const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualBuku' : 'transaksiCetakBuku';
+                    const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
                     const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                     const oldInvSnapshot = await get(oldInvoiceRef);
                     if (oldInvSnapshot.exists()) {
@@ -356,7 +361,7 @@ const TransaksiForm = ({
                     if (initialValues.idTransaksi && initialValues.tipeTransaksi) {
                         const paymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
                         const invoiceDbPath = initialValues.tipeTransaksi === 'Penjualan Plate'
-                            ? 'transaksiJualBuku'
+                            ? 'transaksiJualPlate'
                             : 'transaksiCetakBuku';
                         const invoiceRef = ref(db, `${invoiceDbPath}/${initialValues.idTransaksi}`);
 

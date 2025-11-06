@@ -30,7 +30,7 @@ const InvoicePublicPage = () => {
                 }
 
                 setLoading(true);
-                const txRef = ref(db, `transaksiJualBuku/${id}`);
+                const txRef = ref(db, `transaksiJualPlate/${id}`);
                 const snapshot = await get(txRef);
 
                 if (!snapshot.exists()) throw new Error('Transaksi tidak ditemukan');

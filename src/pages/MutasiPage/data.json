@@ -1,7 +1,7 @@
 {
   "plate": {
     "-Buku_A01": {
-      "judul": "Belajar Firebase dari Nol",
+      "ukuran": "Belajar Firebase dari Nol",
       "stok": 90,
       "hargaJual": 100000,
       "hargaJualSpesial": 80000,
@@ -41,7 +41,7 @@
       "telepon": "08123456002"
     }
   },
-  "transaksiJualBuku": {
+  "transaksiJualPlate": {
     "-TxJual_001": {
       "nomorInvoice": "INV-DUMMY-001",
       "tanggal": 1760652100000,
@@ -51,7 +51,7 @@
       "items": [
         {
           "idBuku": "-Buku_A01",
-          "judulBuku": "Belajar Firebase dari Nol",
+          "ukuranBuku": "Belajar Firebase dari Nol",
           "jumlah": 10,
           "hargaSatuan": 80000,
           "diskonPersen": 10
@@ -80,7 +80,7 @@
       "items": [
         {
           "idBuku": "-Buku_A01",
-          "judulBuku": "Belajar Firebase dari Nol",
+          "ukuranBuku": "Belajar Firebase dari Nol",
           "jumlah": 200,
           "hargaSatuan": 50000,
           "diskonPersen": 0

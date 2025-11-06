@@ -5,15 +5,16 @@ export const TipeTransaksi = {
 };
 
 export const KategoriPemasukan = {
-  penjualan_buku: "Penjualan Plate",
-  penjualan_sisa_kertas: "Penjualan Sisa Kertas",
+  penjualan_plate: "Penjualan Plate",
+  penjualan_sisa_palte: "Penjualan Sisa Plate",
   pemasukan_lain: "Pemasukan Lain-lain",
 
 };
 
 export const KategoriPengeluaran = {
 
-  komisi: "Komisi",
+  gum:"Gum",
+  developer:'Developer',
 
   gaji_produksi: "Gaji Karyawan",
   operasional: "Operasional",

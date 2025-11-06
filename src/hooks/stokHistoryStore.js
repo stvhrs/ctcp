@@ -18,7 +18,7 @@ let listeners = new Set(); // Daftar semua komponen yang mendengarkan
 
 // 2. Buat koneksi stream ke Firebase RTDB (hanya sekali)
 // Mengambil dari root 'historiStok' untuk efisiensi
-const historyRef = query(ref(db, 'historiStok'), orderByChild('timestamp'));
+const historyRef = query(ref(db, 'historiStok'), orderByChild('timestamp'),);
 
 // (UBAH) Argumen 'snapshot' diubah namanya menjadi 'fbSnapshot' 
 // agar tidak bentrok dengan variabel 'memoizedSnapshot' kita.

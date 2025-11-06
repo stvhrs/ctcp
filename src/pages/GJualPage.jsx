@@ -69,7 +69,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
         const hargaFinal = hargaSatuan * jumlah * (1 - diskonPersen / 100);
         totalQty += jumlah;
         totalTagihan += hargaFinal;
-        items.push({ idBuku: randomBookId, judulBuku: randomBookTitle, jumlah, hargaSatuan, diskonPersen });
+        items.push({ idBuku: randomBookId, ukuranBuku: randomBookTitle, jumlah, hargaSatuan, diskonPersen });
     }
      if (items.length === 0) { // Seharusnya tidak terjadi dengan logika di atas
         throw new Error("Gagal membuat item plate acak.");
@@ -80,7 +80,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
     const statusPembayaran = statuses[Math.floor(Math.random() * statuses.length)];
     let jumlahTerbayar = 0;
     let historiPembayaran = null;
-    const generateHistoryKey = () => push(ref(db, `transaksiJualBuku/${invoiceKey}/historiPembayaran`)).key;
+    const generateHistoryKey = () => push(ref(db, `transaksiJualPlate/${invoiceKey}/historiPembayaran`)).key;
 
     if (statusPembayaran === 'Lunas') {
         jumlahTerbayar = Math.round(totalTagihan);
@@ -126,7 +126,7 @@ function GJualPage() {
         setStatusText('Mengambil nomor invoice terakhir...');
         console.log("Memulai fetchLastInvoice...");
         try {
-            const lastInvQuery = query(ref(db, 'transaksiJualBuku'), orderByKey(), limitToLast(1));
+            const lastInvQuery = query(ref(db, 'transaksiJualPlate'), orderByKey(), limitToLast(1));
             const lastInvSnapshot = await get(lastInvQuery);
 
             let lastInvNum = null;
@@ -187,7 +187,7 @@ function GJualPage() {
                    console.log(`[Iterasi ${i+1}] Generated Key: ${txKey}, Invoice: ${txData.nomorInvoice}`);
                  }
 
-                updates[`transaksiJualBuku/${txKey}`] = txData;
+                updates[`transaksiJualPlate/${txKey}`] = txData;
                 currentLastInvNumber = txData.nomorInvoice; // Update nomor untuk iterasi berikutnya
 
                 // Kirim per batch
@@ -246,7 +246,7 @@ function GJualPage() {
                     <Paragraph>
                         Fitur ini akan membuat 10.000 data transaksi penjualan plate acak
                         dengan ID/nama plate dan pelanggan acak.
-                        Data akan disimpan ke Firebase RTDB di path <Text code>/transaksiJualBuku</Text>.
+                        Data akan disimpan ke Firebase RTDB di path <Text code>/transaksiJualPlate</Text>.
                         Nomor invoice akan digenerate berurutan.
                     </Paragraph>
                     <Alert

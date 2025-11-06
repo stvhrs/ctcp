@@ -130,8 +130,8 @@ function initializeUnpaidListeners() {
             notifyUnpaidListeners(); // Notify combined result
         };
 
-        const jualBBRef = query(ref(db, 'transaksiJualBuku'), orderByChild('statusPembayaran'), equalTo('Belum Bayar'));
-        const jualDPRef = query(ref(db, 'transaksiJualBuku'), orderByChild('statusPembayaran'), equalTo('DP'));
+        const jualBBRef = query(ref(db, 'transaksiJualPlate'), orderByChild('statusPembayaran'), equalTo('Belum Bayar'));
+        const jualDPRef = query(ref(db, 'transaksiJualPlate'), orderByChild('statusPembayaran'), equalTo('DP'));
 
         const unsubBB = onValue(jualBBRef, snapshot => {
             jualBBData = snapshotToArrayWithId(snapshot);
