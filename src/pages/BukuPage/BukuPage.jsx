@@ -31,7 +31,7 @@ const { TabPane } = Tabs;
 
 const BukuPage = () => {
     // --- State ---
-    // --- MODIFIKASI: 'bukuList' diganti nama menjadi 'plateList' untuk kejelasan ---
+    // --- MODIFIKASI: 'plateList' diganti nama menjadi 'plateList' untuk kejelasan ---
     const { data: plateList, loading: initialLoading } = useBukuData(); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStokModalOpen, setIsStokModalOpen] = useState(false);

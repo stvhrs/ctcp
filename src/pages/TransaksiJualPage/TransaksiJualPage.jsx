@@ -389,8 +389,8 @@ const renderAksi = useCallback((_, record) => {
                             <Title level={4} style={{ margin: 0, marginBottom: 24 }}>Ringkasan Transaksi (Berdasarkan Filter)</Title>
                              <Row gutter={[16, 16]}>
                                  <Col xs={24} lg={8}><Card variant="borderless" style={{ backgroundColor: '#f0f2f5' }}><Statistic title={`Total Tagihan (${recapData.isFilterActive ? 'Filter Aktif' : 'Semua'})`} value={recapData.totalTagihan} formatter={formatCurrency} /></Card></Col>
-                                 <Col xs={24} lg={8}><Card variant="borderless" style={{ backgroundColor: '#f0f2f5' }}><Statistic title={`Total Terbayar (${recapData.isFilterActive ? 'Filter Aktif' : 'Semua'})`} value={recapData.totalTerbayar} formatter={formatCurrency} valueStyle={{ color: '#3f8600' }} suffix={`(${paidPercent.toFixed(1)}%)`} /></Card></Col>
-                                <Col xs={24} lg={8}><Card variant="borderless" style={{ backgroundColor: '#f0f2f5' }}><Statistic title={`Total Sisa (${recapData.isFilterActive ? 'Filter Aktif' : 'Semua'})`} value={recapData.sisaTagihan} formatter={formatCurrency} valueStyle={{ color: recapData.sisaTagihan > 0 ? '#cf1322' : '#3f8600' }} suffix={`(${outstandingPercent.toFixed(1)}%)`} /></Card></Col>
+                                 <Col xs={24} lg={8}><Card variant="borderless" style={{ backgroundColor: '#f0f2f5' }}><Statistic title={`Total Terbayar (${recapData.isFilterActive ? 'Filter Aktif' : 'Semua'})`} value={recapData.totalTerbayar} formatter={formatCurrency} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+                                <Col xs={24} lg={8}><Card variant="borderless" style={{ backgroundColor: '#f0f2f5' }}><Statistic title={`Total Sisa (${recapData.isFilterActive ? 'Filter Aktif' : 'Semua'})`} value={recapData.sisaTagihan} formatter={formatCurrency} valueStyle={{ color: recapData.sisaTagihan > 0 ? '#cf1322' : '#3f8600' }} /></Card></Col>
                              </Row>
                          </Card>
                          {/* Card Tabel Transaksi */}

@@ -26,7 +26,7 @@ const StokFormModal = ({ open, onCancel, plate }) => {
             setHistoryLoading(true);
 
             // 1. Query ke root 'historiStok'
-            // 2. Filter berdasarkan 'bukuId' yang sama dengan plate.id (ID asli plate)
+            // 2. Filter berdasarkan 'plateId' yang sama dengan plate.id (ID asli plate)
             const bookHistoryRef = query(
                 ref(db, 'historiStok'),
                 orderByChild('id'),
@@ -74,9 +74,9 @@ const StokFormModal = ({ open, onCancel, plate }) => {
         try {
             // --- LANGKAH 1: Transaksi Atomik pada STOK BUKU ---
             // Menggunakan ID asli plate (plate.id)
-            const bukuRef = ref(db, `plate/${plate.id}`); 
+            const plateRef = ref(db, `plate/${plate.id}`); 
             
-            await runTransaction(bukuRef, (currentData) => {
+            await runTransaction(plateRef, (currentData) => {
                 if (!currentData) {
                     return; // Plate tidak ada
                 }

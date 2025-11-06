@@ -68,7 +68,7 @@ const MainLayout = () => {
          if (path.startsWith('/transaksi-jual')) return '/transaksi-jual';
          if (path.startsWith('/pelanggan')) return '/pelanggan';
          // Rute baru
-         if (path.startsWith('/gbuku')) return '/gbuku';
+         if (path.startsWith('/gplate')) return '/gplate';
          if (path.startsWith('/gmutasi')) return '/gmutasi';
          if (path.startsWith('/gjual')) return '/gjual';
          // Rute lama dihapus
@@ -130,7 +130,7 @@ const MainLayout = () => {
                       <Route path="/transaksi-jual" element={<TransaksiJualPage />} />
                       <Route path="/pelanggan" element={<PelangganPage />} />
                       {/* Rute Baru */}
-                      <Route path="/gbuku" element={<GBukuPage />} />
+                      <Route path="/gplate" element={<GBukuPage />} />
                       <Route path="/gmutasi" element={<GMutasiPage />} />
                       <Route path="/gjual" element={<GJualPage />} />
                       <Route path="/chart" element={<GenerateBukuChart />} />

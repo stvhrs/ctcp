@@ -99,71 +99,71 @@ export function useTransaksiJualData() {
 // =============================================================
 // --- Singleton RTDB Listener untuk 'plate' ---
 // =============================================================
-let bukuCache = [];
-let bukuListeners = [];
-let bukuIsInitialized = false;
-let bukuIsLoading = true; // Mulai dengan true
-let bukuGlobalUnsubscribe = null;
+let plateCache = [];
+let plateListeners = [];
+let plateIsInitialized = false;
+let plateIsLoading = true; // Mulai dengan true
+let plateGlobalUnsubscribe = null;
 
 function notifyBukuListeners() {
-    bukuListeners.forEach((listener) => listener([...bukuCache]));
+    plateListeners.forEach((listener) => listener([...plateCache]));
 }
 
 function initializeBukuListener() {
-    if (bukuGlobalUnsubscribe) return;
+    if (plateGlobalUnsubscribe) return;
 
     console.log("Initializing Plate listener..."); // Debug log
-    bukuIsLoading = true;
+    plateIsLoading = true;
 
-    bukuGlobalUnsubscribe = onValue(ref(db, 'plate'), (snapshot) => {
+    plateGlobalUnsubscribe = onValue(ref(db, 'plate'), (snapshot) => {
          console.log("Plate data received."); // Debug log
-        bukuCache = snapshotToArray(snapshot);
+        plateCache = snapshotToArray(snapshot);
         // Pertimbangkan sort default jika perlu (misal by updatedAt)
-        // bukuCache.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-        bukuIsInitialized = true;
-        bukuIsLoading = false;
+        // plateCache.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        plateIsInitialized = true;
+        plateIsLoading = false;
         notifyBukuListeners();
     }, (error) => {
         console.error("Firebase error (plate global):", error);
-        bukuIsInitialized = true;
-        bukuIsLoading = false;
+        plateIsInitialized = true;
+        plateIsLoading = false;
         notifyBukuListeners();
     });
 }
 
 // Custom Hook untuk Data Plate
 export function useBukuData() {
-    const [bukuList, setBukuList] = useState(bukuCache);
-    const [loadingBuku, setLoadingBuku] = useState(!bukuIsInitialized && bukuIsLoading);
+    const [plateList, setBukuList] = useState(plateCache);
+    const [loadingBuku, setLoadingBuku] = useState(!plateIsInitialized && plateIsLoading);
 
     useEffect(() => {
-        if (!bukuGlobalUnsubscribe) {
+        if (!plateGlobalUnsubscribe) {
             initializeBukuListener();
         }
 
         const listener = (newData) => {
             setBukuList(newData);
-            setLoadingBuku(!bukuIsInitialized && bukuIsLoading);
+            setLoadingBuku(!plateIsInitialized && plateIsLoading);
         };
 
-        bukuListeners.push(listener);
+        plateListeners.push(listener);
 
-        if (bukuIsInitialized) {
-            setBukuList([...bukuCache]);
+        if (plateIsInitialized) {
+            setBukuList([...plateCache]);
             setLoadingBuku(false);
         } else {
             setLoadingBuku(true);
         }
 
         return () => {
-            bukuListeners = bukuListeners.filter((cb) => cb !== listener);
-            console.log("Plate listener removed. Count:", bukuListeners.length); // Debug
+            plateListeners = plateListeners.filter((cb) => cb !== listener);
+            console.log("Plate listener removed. Count:", plateListeners.length); // Debug
             // Logika unsubscribe global bisa ditambahkan di sini jika perlu
         };
     }, []);
 
     // Ganti nama return agar sesuai dengan penggunaan di komponen
-    return { data: bukuList, loading: loadingBuku };
+    return { data: plateList, loading: loadingBuku };
 }
 
 // =============================================================

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
     Modal, Form, Input, InputNumber, DatePicker, Radio, Select, Upload, Button, Card, Empty, Typography, Spin,
-    message // <-- Ditambahkan
+    message
 } from 'antd';
-import { UploadOutlined, DeleteOutlined } from '@ant-design/icons'; // <-- Ditambahkan
+import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 // --- Impor Firebase ---
@@ -19,29 +19,28 @@ const { Option } = Select;
 // ====================== CONSTANTS ======================
 
 export const TipeTransaksi = {
-  pemasukan: 'pemasukan',
-  pengeluaran: 'pengeluaran',
+    pemasukan: 'pemasukan',
+    pengeluaran: 'pengeluaran',
 };
 
 export const KategoriPemasukan = {
-  penjualan_plate: "Penjualan Plate",
-  penjualan_sisa_palte: "Penjualan Sisa Plate",
-  pemasukan_lain: "Pemasukan Lain-lain",
+    penjualan_plate: "Penjualan Plate",
+    penjualan_sisa_palte: "Penjualan Sisa Plate",
+    pemasukan_lain: "Pemasukan Lain-lain",
 
 };
 
 export const KategoriPengeluaran = {
-
-  gum:"Gum",
-  developer:'Developer',
-
-  gaji_produksi: "Gaji Karyawan",
-  operasional: "Operasional",
-
-  pengeluaran_lain: "Pengeluaran Lain-lain",
+    gum:"Gum",
+    developer:'Developer',
+    plate:"Plate",
+    gaji_produksi: "Gaji Karyawan",
+    operasional: "Operasional",
+    pengeluaran_lain: "Pengeluaran Lain-lain",
 };
 
-const INVOICE_PAYMENT_CATEGORIES = ['Penjualan Plate', ];
+// --- PERBAIKAN: Gunakan 'key' dari KategoriPemasukan, bukan 'label' ---
+const INVOICE_PAYMENT_CATEGORIES = ['penjualan_plate', ];
 
 // ====================== UTILITIES ======================
 const currencyFormatter = (value) =>
@@ -53,7 +52,7 @@ const TransaksiForm = ({
     onCancel,
     initialValues,
     unpaidJual = [],
-    unpaidCetak = [],
+    // unpaidCetak = [], // <-- DIHAPUS
     loadingInvoices = false
 }) => {
     const [form] = Form.useForm();
@@ -72,13 +71,14 @@ const TransaksiForm = ({
 
     const payableInvoices = React.useMemo(() => {
         let list = [];
-        if (watchingKategori === 'Penjualan Plate') {
+        // --- PERBAIKAN: Gunakan 'key' (penjualan_plate) ---
+        if (watchingKategori === 'penjualan_plate') { 
             list = unpaidJual.map(tx => ({ ...tx, tipeTransaksi: "Penjualan Plate" }));
-        } else if (watchingKategori === 'Jasa Cetak Plate') {
-            list = unpaidCetak.map(tx => ({ ...tx, tipeTransaksi: 'Jasa Cetak Plate' }));
+        // --- DIHAPUS: Blok 'else if (watchingKategori === 'Jasa Cetak Plate')' ---
         }
         return list.filter(tx => tx.statusPembayaran !== 'Lunas');
-    }, [watchingKategori, unpaidJual, unpaidCetak]);
+    // --- PERBAIKAN: Hapus dependency unpaidCetak ---
+    }, [watchingKategori, unpaidJual]);
 
     useEffect(() => {
         if (!open) {
@@ -101,7 +101,8 @@ const TransaksiForm = ({
             });
 
             if (initialValues.idTransaksi) {
-                const originalTxn = [...unpaidJual, ...unpaidCetak].find(
+                // --- PERBAIKAN: Hapus unpaidCetak dari pencarian ---
+                const originalTxn = [...unpaidJual].find(
                     tx => tx.id === initialValues.idTransaksi
                 );
 
@@ -130,16 +131,18 @@ const TransaksiForm = ({
             form.setFieldsValue({
                 tipe: TipeTransaksi.pemasukan,
                 tanggal: dayjs(),
-                kategori: 'Pemasukan Lain-lain',
+                kategori: 'pemasukan_lain', // <-- PERBAIKAN: Gunakan key
             });
         }
-    }, [initialValues, open, form, unpaidJual, unpaidCetak]);
+    // --- PERBAIKAN: Hapus dependency unpaidCetak ---
+    }, [initialValues, open, form, unpaidJual]);
 
 
     const handleTipeChange = (e) => {
         const newTipe = e.target.value;
         form.setFieldsValue({
-            kategori: newTipe === TipeTransaksi.pemasukan ? 'Pemasukan Lain-lain' : 'Operasional',
+            // --- PERBAIKAN: Gunakan key ---
+            kategori: newTipe === TipeTransaksi.pemasukan ? 'pemasukan_lain' : 'operasional',
             idTransaksi: null,
             keterangan: null,
             jumlah: null,
@@ -206,13 +209,13 @@ const TransaksiForm = ({
             let dataToSave = {};
             let oldPaymentAmount = 0;
             let oldInvoiceId = null;
-            let oldInvoiceType = null; // 'Penjualan Plate' | 'Jasa Cetak Plate'
+            // let oldInvoiceType = null; // <-- DIHAPUS
 
             if (isEditing) {
                 if (initialValues.idTransaksi) {
                     oldPaymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
                     oldInvoiceId = initialValues.idTransaksi;
-                    oldInvoiceType = initialValues.tipeTransaksi;
+                    // oldInvoiceType = initialValues.tipeTransaksi; // <-- DIHAPUS
                 }
             }
 
@@ -235,7 +238,8 @@ const TransaksiForm = ({
 
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
-                const invoiceDbPath = dataLain.tipeTransaksi === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
+                // --- PERBAIKAN: Path disederhanakan, 'transaksiCetakBuku' dihapus ---
+                const invoiceDbPath = 'transaksiJualPlate'; 
                 const invoiceRef = ref(db, `${invoiceDbPath}/${dataLain.idTransaksi}`);
                 const invoiceSnapshot = await get(invoiceRef);
                 if (!invoiceSnapshot.exists()) throw new Error("Invoice terkait tidak ditemukan!");
@@ -244,7 +248,6 @@ const TransaksiForm = ({
                 let currentPaid = invoiceData.jumlahTerbayar || 0;
                 let currentHistory = invoiceData.riwayatPembayaran || {};
 
-                // **PERUBAHAN DI SINI: Menambahkan 'keterangan'**
                 if (isEditing) {
                     if (oldInvoiceId === dataLain.idTransaksi) {
                         currentPaid = (currentPaid - oldPaymentAmount) + newPaymentAmount;
@@ -252,11 +255,12 @@ const TransaksiForm = ({
                             tanggal: dataLain.tanggal.valueOf(), 
                             jumlah: newPaymentAmount, 
                             mutasiId: mutasiId, 
-                            keterangan: dataToSave.keterangan // <-- DITAMBAHKAN
+                            keterangan: dataToSave.keterangan 
                         };
                     } else {
-                        if (oldInvoiceId && oldInvoiceType) {
-                            const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
+                        // --- PERBAIKAN: Logika 'oldInvoiceType' dihapus ---
+                        if (oldInvoiceId) { 
+                            const oldInvoiceDbPath = 'transaksiJualPlate'; // <-- Disederhanakan
                             const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                             const oldInvSnapshot = await get(oldInvoiceRef);
                             if (oldInvSnapshot.exists()) {
@@ -275,7 +279,7 @@ const TransaksiForm = ({
                             tanggal: dataLain.tanggal.valueOf(), 
                             jumlah: newPaymentAmount, 
                             mutasiId: mutasiId,
-                            keterangan: dataToSave.keterangan // <-- DITAMBAHKAN
+                            keterangan: dataToSave.keterangan 
                         };
                     }
                 } else {
@@ -284,10 +288,9 @@ const TransaksiForm = ({
                         tanggal: dataLain.tanggal.valueOf(), 
                         jumlah: newPaymentAmount, 
                         mutasiId: mutasiId,
-                        keterangan: dataToSave.keterangan // <-- DITAMBAHKAN
+                        keterangan: dataToSave.keterangan
                     };
                 }
-                // **AKHIR PERUBAHAN**
 
                 const newStatus = (currentPaid <= 0) ? 'Belum Bayar' : (currentPaid >= invoiceData.totalTagihan) ? 'Lunas' : 'DP';
                 updates[`${invoiceDbPath}/${dataLain.idTransaksi}/jumlahTerbayar`] = currentPaid;
@@ -312,8 +315,9 @@ const TransaksiForm = ({
 
                 updates[`mutasi/${mutasiId}`] = dataToSave;
 
-                if (isEditing && oldInvoiceId && oldInvoiceType) {
-                    const oldInvoiceDbPath = oldInvoiceType === 'Penjualan Plate' ? 'transaksiJualPlate' : 'transaksiCetakBuku';
+                // --- PERBAIKAN: Logika 'oldInvoiceType' dihapus ---
+                if (isEditing && oldInvoiceId) {
+                    const oldInvoiceDbPath = 'transaksiJualPlate'; // <-- Disederhanakan
                     const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
                     const oldInvSnapshot = await get(oldInvoiceRef);
                     if (oldInvSnapshot.exists()) {
@@ -358,11 +362,10 @@ const TransaksiForm = ({
 
                     updates[`mutasi/${mutasiId}`] = null;
 
-                    if (initialValues.idTransaksi && initialValues.tipeTransaksi) {
+                    // --- PERBAIKAN: Logika 'tipeTransaksi' disederhanakan ---
+                    if (initialValues.idTransaksi) {
                         const paymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
-                        const invoiceDbPath = initialValues.tipeTransaksi === 'Penjualan Plate'
-                            ? 'transaksiJualPlate'
-                            : 'transaksiCetakBuku';
+                        const invoiceDbPath = 'transaksiJualPlate'; // <-- Disederhanakan
                         const invoiceRef = ref(db, `${invoiceDbPath}/${initialValues.idTransaksi}`);
 
                         const invoiceSnapshot = await get(invoiceRef);

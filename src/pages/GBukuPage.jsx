@@ -25,7 +25,7 @@ const formatCellValue = (cellValue) => {
 /**
  * Mem-parsing satu OBJEK data dari JSON menjadi objek plate.
  * @param {Object} item - Objek data baris dari array JSON
- * @returns {Object|null} - Objek bukuData yang sudah diproses, atau null jika baris tidak valid.
+ * @returns {Object|null} - Objek plateData yang sudah diproses, atau null jika baris tidak valid.
 */
 const parseBookRow = (item) => {
   // Pastikan item adalah objek
@@ -147,7 +147,7 @@ const parseBookRow = (item) => {
   const stok = parseInt(stokStr, 10) || 0;
 
   // 4e. Tipe Plate (Sesuai Permintaan)
-  const tipe_buku = (merek.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
+  const tipe_plate = (merek.toLowerCase() === 'bse' || tahun === 'revisi') ? 'HET' : '';
 
   // --- 5. Buat Histori Stok Awal ---
   const historyRef = push(ref(db, 'plate/historiStok'));
@@ -182,7 +182,7 @@ const parseBookRow = (item) => {
     spek: spek,
     
     spek_kertas: spek, 
-    tipe_buku: tipe_buku, 
+    tipe_plate: tipe_plate, 
 
     hargaJual: 0,
     diskonJual: 0,
@@ -237,10 +237,10 @@ function GBukuPage() {
 
         for (let i = 0; i < jsonData.length; i++) {
           const item = jsonData[i];
-          const bukuData = parseBookRow(item);
+          const plateData = parseBookRow(item);
           
-          if (bukuData) {
-            results.push(bukuData);
+          if (plateData) {
+            results.push(plateData);
           } else {
             console.warn(`Skipping item index ${i}: Invalid or missing data.`, item);
             skippedCount++;
@@ -277,13 +277,13 @@ function GBukuPage() {
     const loadingKey = 'uploading';
     message.loading({ content: `Mengunggah ${processedData.length} data...`, key: loadingKey, duration: 0 });
     
-    const bukuListRef = ref(db, 'plate');
+    const plateListRef = ref(db, 'plate');
     let successCount = 0;
     let errorCount = 0;
 
     const uploadPromises = processedData.map(async (bookData) => {
       try {
-        const newBookRef = push(bukuListRef);
+        const newBookRef = push(plateListRef);
         await set(newBookRef, bookData);
         successCount++;
       } catch (error) {

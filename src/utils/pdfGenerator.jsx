@@ -8,7 +8,7 @@ const companyInfo = {
     hp: "0882-0069-05391"
 };
 
-const baseURL = 'https://gudanggalatama.web.app/';
+const baseURL = 'https://ctcpgalatama.web.app/';
 
 const terms = [
     'Barang yang sudah dibeli tidak dapat dikembalikan atau ditukar.',

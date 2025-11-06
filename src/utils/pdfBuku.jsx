@@ -53,7 +53,7 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
         plate.merek_plate || '-', // <-- Menggunakan merek_plate
         numberFormatter(plate.stok),
         currencyFormatter(plate.harga_plate) // <-- Menggunakan harga_plate
-        // <-- Kolom buku lainnya dihapus
+        // <-- Kolom plate lainnya dihapus
     ]);
     // --- AKHIR MODIFIKASI KOLOM & DATA ---
 

@@ -20,7 +20,7 @@ function notifyPelangganListeners() { /* ... */ }
 function initializePelangganListener() { /* ... ensure snapshotToArrayWithId is used ... */ }
 export function usePelangganData() { /* ... existing hook ... */ }
 
-// --- Plate Singleton (Example - Add if not already done, ensure ID is included) ---
+// --- Buku Singleton (Example - Add if not already done, ensure ID is included) ---
 // let bukuCache = []; etc...
 // export function useBukuData() { /* ... similar logic ... */ }
 
@@ -165,8 +165,8 @@ function initializeUnpaidListeners() {
             notifyUnpaidListeners(); // Notify combined result
         };
 
-        const cetakBBRef = query(ref(db, 'transaksiCetakBuku'), orderByChild('statusPembayaran'), equalTo('Belum Bayar'));
-        const cetakDPRef = query(ref(db, 'transaksiCetakBuku'), orderByChild('statusPembayaran'), equalTo('DP'));
+        const cetakBBRef = query(ref(db, 'transaksiCetakPlate'), orderByChild('statusPembayaran'), equalTo('Belum Bayar'));
+        const cetakDPRef = query(ref(db, 'transaksiCetakPlate'), orderByChild('statusPembayaran'), equalTo('DP'));
 
          const unsubCetakBB = onValue(cetakBBRef, snapshot => {
             cetakBBData = snapshotToArrayWithId(snapshot);

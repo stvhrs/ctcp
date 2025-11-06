@@ -14,6 +14,7 @@ export const KategoriPemasukan = {
 export const KategoriPengeluaran = {
 
   gum:"Gum",
+  plate:"Plate",
   developer:'Developer',
 
   gaji_produksi: "Gaji Karyawan",

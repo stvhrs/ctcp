@@ -113,7 +113,7 @@ export const generateBooks = (numBooks) => {
             kode_plate: kodeBuku,
             ukuran: ukuran, // Judul baru yang deskriptif
             merek: merek,
-            tipe_buku: tipeBuku, 
+            tipe_plate: tipeBuku, 
             jenjang: jenjang, // Tambahkan jenjang
             kelas: kelas,     // Tambahkan kelas
             mapel: mapel,     // Tambahkan mapel
