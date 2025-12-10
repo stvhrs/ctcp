@@ -43,9 +43,9 @@ const formatTimestamp = (timestamp) => {
 // --- Kolom untuk tabel item plate (DIUBAH AGAR RESPONSIVE) ---
 const itemColumns = [
     {
-        title: 'Judul Plate',
-        dataIndex: 'ukuranBuku',
-        key: 'ukuranBuku',
+        title: 'Ukuran Plate',
+        dataIndex: 'namaPlate',
+        key: 'namaPlate',
         // 'fixed: 'left'' bisa ditambahkan jika tabel sangat lebar
         // fixed: 'left', 
     },

@@ -1,11 +1,7 @@
 // src/utils/pdfGenerator.js
-import { numberFormatter, currencyFormatter } from './formatters'; // <-- percentFormatter dihapus
-
-// --- MODIFIKASI IMPORT ---
+import { numberFormatter, currencyFormatter } from './formatters';
 import jsPDF from 'jspdf';
-// Hapus: import 'jspdf-autotable'; 
-import autoTable from 'jspdf-autotable'; // Import fungsi autoTable secara langsung
-// --- AKHIR MODIFIKASI ---
+import autoTable from 'jspdf-autotable';
 
 export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     const {
@@ -13,6 +9,13 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
         address = "Jl. Kalicari Dalam I No.4, Kalicari, Kec. Pedurungan, Kota Semarang, Jawa Tengah 50198",
         phone = "0882-0069-05391" 
     } = headerInfo;
+
+    // --- 1. HITUNG TOTAL ASET (STOK x HARGA BELI) ---
+    const totalAset = dataToExport.reduce((sum, item) => {
+        const stok = Number(item.stok) || 0;
+        const harga = Number(item.harga_plate) || 0;
+        return sum + (stok * harga);
+    }, 0);
 
     const doc = new jsPDF('vertical');
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -31,33 +34,29 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
     doc.line(14, 29, pageWidth - 14, 29); 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('Daftar Stok Plate', pageWidth / 2, 36, { align: 'center' }); // <-- Judul sudah benar
+    doc.text('Daftar Stok & Aset Plate', pageWidth / 2, 36, { align: 'center' });
     // --- AKHIR HEADER ---
     
-    // --- MODIFIKASI BESAR: KOLOM & DATA TABEL ---
-    // Kolom disesuaikan dengan data Plate
+    // --- KOLOM & DATA TABEL ---
     const tableColumn = [
         "No.", 
-        "Kode Plate", 
+        // "Kode Plate", // (Opsional: Hapus jika memang tidak dipakai lagi)
         "Ukuran Plate", 
         "Merek Plate", 
-        "     Stok", // Padding untuk perataan kanan
-        "         Harga Plate" // Padding untuk perataan kanan
+        "    Stok", 
+        "        Harga Beli" 
     ];
     
-    // Data mapping disesuaikan dengan data Plate
     const tableRows = dataToExport.map((plate, index) => [
         index + 1, 
-        plate.kode_plate || '-',
+        // plate.kode_plate || '-', // (Opsional: Hapus jika kolom dihapus)
         plate.ukuran_plate || '-',
-        plate.merek_plate || '-', // <-- Menggunakan merek_plate
+        plate.merek_plate || '-', 
         numberFormatter(plate.stok),
-        currencyFormatter(plate.harga_plate) // <-- Menggunakan harga_plate
-        // <-- Kolom plate lainnya dihapus
+        currencyFormatter(plate.harga_plate) 
     ]);
-    // --- AKHIR MODIFIKASI KOLOM & DATA ---
 
-    // --- PENGATURAN TABEL autoTable (MODIFIED) ---
+    // --- PENGATURAN TABEL autoTable ---
     autoTable(doc, { 
         head: [tableColumn],
         body: tableRows,
@@ -67,43 +66,50 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
             fillColor: [230, 230, 230], 
             textColor: 30, 
             fontStyle: 'bold', 
-            // halign: 'left', // Dihapus untuk style per kolom
-            fontSize: 8, // Sedikit diperbesar agar mudah dibaca
+            fontSize: 8, 
             cellPadding: 1 
         },
         bodyStyles: { 
-            fontSize: 7, // Sedikit diperbesar agar mudah dibaca
+            fontSize: 7, 
             cellPadding: 1 
         },
         alternateRowStyles: {
             fillColor: [245, 245, 245] 
         },
-        // --- MODIFIKASI BESAR: Style Kolom disesuaikan (6 kolom) ---
         columnStyles: { 
             0: { cellWidth: 7, halign: 'left' },   // No.
-            1: { cellWidth: "auto", halign: 'left'},  // Kode Plate
-            2: { cellWidth: "auto", halign: 'left'},  // Ukuran Plate
-            3: { cellWidth: "auto", halign: 'left'},  // Merek Plate
-            4: { cellWidth: 15, halign: 'right' }, // Stok
-            5: { cellWidth: 25, halign: 'right' }  // Harga Plate
+            // 1: { cellWidth: "auto", halign: 'left'}, // Kode Plate (Sesuaikan index jika dihapus)
+            1: { cellWidth: "auto", halign: 'left'},  // Ukuran Plate
+            2: { cellWidth: "auto", halign: 'left'},  // Merek Plate
+            3: { cellWidth: 15, halign: 'right' }, // Stok
+            4: { cellWidth: 25, halign: 'right' }  // Harga Plate
         },
-        // --- HAPUS: willDrawCell tidak diperlukan lagi ---
-        // willDrawCell: function (data) { ... },
-        
         didDrawPage: function (data) {
              try {
                 // @ts-ignore 
                 finalY = data.cursor.y; 
              } catch(e){
-                console.warn("Tidak bisa mendapatkan cursor.y dari didDrawPage");
+                console.warn("Tidak bisa mendapatkan cursor.y");
                 // @ts-ignore 
                 finalY = doc.lastAutoTable?.finalY || 50; 
              }
         }
     });
-    // --- AKHIR PENGATURAN TABEL ---
 
-    // --- FOOTER PDF (Tidak berubah) ---
+    // --- 2. TAMPILKAN TOTAL ASET SETELAH TABEL ---
+    // Ambil posisi Y terakhir dari tabel
+    const lastY = doc.lastAutoTable.finalY + 10; // Beri jarak 10 unit dari tabel
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    
+    // Teks Label
+    doc.text("Total Aset (Stok x Harga):", pageWidth - 60, lastY, { align: 'right' });
+    
+    // Teks Nominal
+    doc.text(currencyFormatter(totalAset), pageWidth - 14, lastY, { align: 'right' });
+
+    // --- FOOTER PDF ---
     const pageCount = doc.internal.getNumberOfPages ? doc.internal.getNumberOfPages() : 1; 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
@@ -114,7 +120,6 @@ export const generateBukuPdfBlob = (dataToExport, headerInfo = {}) => {
         doc.text(printDate, 14, pageHeight - 10);
         doc.text(pageNumText, pageWidth - 14 - doc.getTextWidth(pageNumText), pageHeight - 10);
     }
-    // --- AKHIR FOOTER ---
 
     return doc.output('blob'); 
 };

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } fr
 import {
     Layout, Card, Table, Button, Modal, Input, Space, Typography, Row, Col, Tabs, 
     message, Tooltip, Empty, Grid, DatePicker, Spin, Divider, App 
-    // --- Tag & percentFormatter dihapus (tidak terpakai) ---
 } from 'antd';
 import {
     PlusOutlined, EditOutlined, HistoryOutlined, ContainerOutlined, PrinterOutlined,
@@ -15,14 +14,12 @@ import BukuTableComponent from './components/BukuTable';
 import BukuForm from './components/BukuForm';
 import StokFormModal from './components/StockFormModal';
 import StokHistoryTab from './components/StokHistoryTab';
-import useBukuData from '../../hooks/useBukuData'; // <-- Hook ini tetap, diasumsikan mengambil data plate
+import useBukuData from '../../hooks/useBukuData'; 
 import useDebounce from '../../hooks/useDebounce';
 import {
     currencyFormatter, numberFormatter, generateFilters
-    // --- percentFormatter dihapus ---
 } from '../../utils/formatters';
-// --- Path PDF disarankan diganti ke yang lebih generik ---
- import { generateBukuPdfBlob } from '../../utils/pdfBuku'; // <-- PERHATIKAN: Fungsi ini harus diupdate agar bisa memproses data 'plate'
+import { generateBukuPdfBlob } from '../../utils/pdfBuku'; 
 import dayjs from 'dayjs';
 
 const { Content } = Layout;
@@ -31,12 +28,11 @@ const { TabPane } = Tabs;
 
 const BukuPage = () => {
     // --- State ---
-    // --- MODIFIKASI: 'plateList' diganti nama menjadi 'plateList' untuk kejelasan ---
     const { data: plateList, loading: initialLoading } = useBukuData(); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStokModalOpen, setIsStokModalOpen] = useState(false);
     const [isBulkRestockModalOpen, setIsBulkRestockModalOpen] = useState(false);
-    // --- MODIFIKASI: State diganti untuk merefleksikan 'plate' ---
+    
     const [editingPlate, setEditingPlate] = useState(null);
     const [stokPlate, setStokPlate] = useState(null);
     const [searchText, setSearchText] = useState('');
@@ -45,9 +41,9 @@ const BukuPage = () => {
     const [columnFilters, setColumnFilters] = useState({});
 
     const showTotalPagination = useCallback((total, range) => {
-        const totalJenis = plateList?.length || 0; // <-- MODIFIKASI: pakai plateList
+        const totalJenis = plateList?.length || 0; 
         return `${range[0]}-${range[1]} dari ${total} (Total ${numberFormatter(totalJenis)} Jenis)`;
-    }, [plateList]); // <-- MODIFIKASI: pakai plateList
+    }, [plateList]); 
 
     const [pagination, setPagination] = useState(() => ({
         current: 1,
@@ -65,26 +61,24 @@ const BukuPage = () => {
     const deferredDebouncedSearchText = useDeferredValue(debouncedSearchText);
     const isFiltering = debouncedSearchText !== deferredDebouncedSearchText;
 
-    // --- MODIFIKASI: Logika pencarian disesuaikan untuk 'plate' ---
+    // --- Logic Pencarian ---
     const searchedBuku = useMemo(() => {
-        let processedData = [...plateList]; // <-- MODIFIKASI: pakai plateList
+        let processedData = [...plateList]; 
         processedData.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
         if (!deferredDebouncedSearchText) return processedData;
 
         const lowerSearch = deferredDebouncedSearchText.toLowerCase();
-        return processedData.filter(plate => // <-- MODIFIKASI: filter data plate
+        return processedData.filter(plate => 
+            // Meskipun kolom dihapus, user biasanya masih ingin bisa mencari by kode
             (plate.kode_plate || '').toLowerCase().includes(lowerSearch) ||
             (plate.merek_plate || '').toLowerCase().includes(lowerSearch) ||
             (plate.ukuran_plate || '').toLowerCase().includes(lowerSearch)
         );
-    }, [plateList, deferredDebouncedSearchText]); // <-- MODIFIKASI: pakai plateList
+    }, [plateList, deferredDebouncedSearchText]); 
 
-    // --- MODIFIKASI: Filter disederhanakan untuk 'plate' ---
     const merekFilters = useMemo(() => generateFilters(plateList, 'merek_plate'), [plateList]);
-    // --- HAPUS: mapelFilters, kelasFilters, tahunTerbitFilters, peruntukanFilters, penerbitFilters, tipeBukuFilters ---
 
-    // --- MODIFIKASI: Logika filter disederhanakan ---
     const dataForTable = useMemo(() => {
         let processedData = [...searchedBuku];
         const activeFilterKeys = Object.keys(columnFilters).filter(
@@ -94,7 +88,6 @@ const BukuPage = () => {
 
         for (const key of activeFilterKeys) {
             const filterValues = columnFilters[key];
-            // --- MODIFIKASI: Hanya filter berdasarkan 'merek_plate' ---
             if (key === 'merek_plate') { 
                 processedData = processedData.filter(item => {
                     const itemValue = item[key];
@@ -106,25 +99,19 @@ const BukuPage = () => {
     }, [searchedBuku, columnFilters]);
 
 
-    // --- MODIFIKASI: Summary disederhanakan untuk 'plate' ---
     const summaryData = useMemo(() => {
         if (initialLoading || !dataForTable || dataForTable.length === 0) {
-            // --- HAPUS: totalAssetNet ---
             return { totalStok: 0, totalAsset: 0, totalJudul: 0 };
         }
-        // --- MODIFIKASI: Kalkulasi disederhanakan ---
         const { totalStok, totalAsset } = dataForTable.reduce((acc, item) => {
             const stok = Number(item.stok) || 0;
-            const harga = Number(item.harga_plate) || 0; // <-- MODIFIKASI: pakai harga_plate
-            // --- HAPUS: diskon & hargaNet ---
+            const harga = Number(item.harga_plate) || 0; 
 
             acc.totalStok += stok;
-            acc.totalAsset += stok * harga; // <-- MODIFIKASI: Aset = stok * harga_plate
-            // --- HAPUS: totalAssetNet ---
+            acc.totalAsset += stok * harga; 
             return acc;
-        }, { totalStok: 0, totalAsset: 0 }); // <-- HAPUS: totalAssetNet
+        }, { totalStok: 0, totalAsset: 0 }); 
 
-        // --- MODIFIKASI: Hapus totalAssetNet ---
         return { totalStok, totalAsset, totalJudul: dataForTable.length };
     }, [dataForTable, initialLoading]);
 
@@ -133,24 +120,23 @@ const BukuPage = () => {
         setColumnFilters({});
     }, [debouncedSearchText]);
 
-    const handleTableChange = useCallback((paginationConfig, filters) => {
+    const handleTableChange = useCallback((paginationConfig, filters, sorter) => {
         setPagination(paginationConfig);
         setColumnFilters(filters);
+        // Sorter ditangani otomatis oleh Antd Table local data, tapi perlu parameter ini agar tidak error
     }, []);
 
-    // --- MODIFIKASI: Handler menggunakan state 'plate' ---
     const handleTambah = useCallback(() => { setEditingPlate(null); setIsModalOpen(true); }, []);
     const handleEdit = useCallback((record) => { setEditingPlate(record); setIsModalOpen(true); }, []);
     const handleTambahStok = useCallback((record) => { setStokPlate(record); setIsStokModalOpen(true); }, []);
     const handleCloseModal = useCallback(() => { setIsModalOpen(false); setEditingPlate(null); }, []);
     const handleCloseStokModal = useCallback(() => { setIsStokModalOpen(false); setStokPlate(null); }, []);
     const handleOpenBulkRestockModal = useCallback(() => {
-        if (!plateList || plateList.length === 0) { message.warn("Data plate belum dimuat."); return; } // <-- MODIFIKASI
+        if (!plateList || plateList.length === 0) { message.warn("Data plate belum dimuat."); return; } 
         setIsBulkRestockModalOpen(true);
-    }, [plateList]); // <-- MODIFIKASI
+    }, [plateList]); 
     const handleCloseBulkRestockModal = useCallback(() => { setIsBulkRestockModalOpen(false); }, []);
 
-    // --- MODIFIKASI: Handler PDF disesuaikan ---
     const handleGenerateAndShowPdf = useCallback(async () => {
         const dataToExport = dataForTable;
         if (!dataToExport?.length) { message.warn('Tidak ada data untuk PDF.'); return; }
@@ -159,11 +145,9 @@ const BukuPage = () => {
         setTimeout(async () => {
             try {
                 if (pdfPreviewUrl) { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }
-                // --- PENTING: Fungsi ini harus diupdate di file utils-nya ---
                 const pdfBlob = generateBukuPdfBlob(dataToExport); 
                 if (!pdfBlob || !(pdfBlob instanceof Blob) || pdfBlob.size === 0) { throw new Error("Gagal membuat PDF."); }
                 const url = URL.createObjectURL(pdfBlob);
-                // --- MODIFIKASI: Nama file PDF ---
                 setPdfFileName(`Daftar_Stok_Plate_${dayjs().format('YYYYMMDD_HHmm')}.pdf`);
                 setPdfPreviewUrl(url);
                 setIsPreviewModalVisible(true);
@@ -182,7 +166,6 @@ const BukuPage = () => {
         if (pdfPreviewUrl) { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }
     }, [pdfPreviewUrl]);
 
-    // --- MODIFIKASI: Tooltip pada Aksi ---
     const renderAksi = useCallback((_, record) => (
         <Space size="small">
             <Tooltip title="Edit Detail Plate"> 
@@ -194,21 +177,15 @@ const BukuPage = () => {
         </Space>
     ), [handleEdit, handleTambahStok]);
 
-    // --- MODIFIKASI BESAR: Definisi Kolom diubah total ---
+    // --- MODIFIKASI: Definisi Kolom ---
     const columns = useMemo(() => [
-        { 
-            title: 'Kode Plate', 
-            dataIndex: 'kode_plate', 
-            key: 'kode_plate', 
-            width: 150, 
-            fixed: screens.md ? 'left' : false 
-        },
         { 
             title: 'Merek Plate', 
             dataIndex: 'merek_plate', 
             key: 'merek_plate', 
             width: 150,
-            filters: merekFilters, // <-- MODIFIKASI: Filter baru
+            fixed: screens.md ? 'left' : false, 
+            filters: merekFilters, 
             filteredValue: columnFilters.merek_plate || null,
             onFilter: (v, r) => r.merek_plate === v
         },
@@ -219,12 +196,14 @@ const BukuPage = () => {
             width: 150 
         },
         { 
-            title: 'Harga Plate', 
+            title: 'Harga Beli', // MODIFIKASI: Ubah judul
             dataIndex: 'harga_plate', 
             key: 'harga_plate', 
             align: 'right', 
             width: 150, 
-            render: currencyFormatter 
+            render: currencyFormatter,
+            // MODIFIKASI: Tambah sorter harga
+            sorter: (a, b) => (Number(a.harga_plate) || 0) - (Number(b.harga_plate) || 0),
         },
         { 
             title: 'Stok', 
@@ -232,7 +211,9 @@ const BukuPage = () => {
             key: 'stok', 
             align: 'right', 
             width: 100, 
-            render: numberFormatter 
+            render: numberFormatter,
+            // MODIFIKASI: Tambah sorter stok
+            sorter: (a, b) => (Number(a.stok) || 0) - (Number(b.stok) || 0),
         },
         { 
             title: 'Aksi', 
@@ -243,12 +224,11 @@ const BukuPage = () => {
             fixed: screens.md ? 'right' : false 
         },
     ], [
-        merekFilters, // <-- MODIFIKASI: Dependensi baru
+        merekFilters, 
         columnFilters, 
         renderAksi, 
         screens.md,
     ]);
-    // --- AKHIR MODIFIKASI KOLOM ---
 
     const tableScrollX = useMemo(() => columns.reduce((acc, col) => acc + (col.width || 150), 0), [columns]);
 
@@ -257,19 +237,16 @@ const BukuPage = () => {
     return (
         <Content style={{ padding: screens.xs ? '12px' : '24px' }}>
             <Tabs defaultActiveKey="1" type="card">
-                {/* --- MODIFIKASI: Judul Tab --- */}
                 <TabPane tab={<Space><ReadOutlined /> Manajemen Plate</Space>} key="1">
                     <Spin spinning={isFiltering} tip="Memfilter data...">
                         <Card>
                             <Row justify="space-between" align="middle" gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                                 <Col lg={6} md={8} sm={24} xs={24}>
-                                    {/* --- MODIFIKASI: Judul Halaman --- */}
                                     <Title level={5} style={{ margin: 0 }}>Manajemen Data Plate</Title>
                                 </Col>
                                 <Col lg={18} md={16} sm={24} xs={24}>
                                     <Space direction={screens.xs ? 'vertical' : 'horizontal'} style={{ width: '100%', justifyContent: 'flex-end' }}>
                                         <Input.Search
-                                            // --- MODIFIKASI: Placeholder ---
                                             placeholder="Cari Kode, Merek, Ukuran..."
                                             value={searchText}
                                             onChange={(e) => setSearchText(e.target.value)}
@@ -278,15 +255,13 @@ const BukuPage = () => {
                                             enterButton
                                         />
                                         <Space wrap>
-                                            {/* --- MODIFIKASI: Teks Tombol --- */}
                                             <Button onClick={handleGenerateAndShowPdf} icon={<PrinterOutlined />} loading={isGeneratingPdf}>
                                                 Cetak Stok Plate
                                             </Button>
                                             <Button icon={<ContainerOutlined />} onClick={handleOpenBulkRestockModal} disabled={initialLoading || plateList.length === 0}>
-                                                {screens.xs ? 'Restock' : 'Restock Massal'}
+                                                {screens.xs ? 'Restock' : 'Penyesuaian Stok'}
                                             </Button>
                                             <Button type="primary" icon={<PlusOutlined />} onClick={handleTambah} disabled={initialLoading}>
-                                                {/* --- MODIFIKASI: Teks Tombol --- */}
                                                 Tambah Plate
                                             </Button>
                                         </Space>
@@ -300,7 +275,7 @@ const BukuPage = () => {
                                 loading={initialLoading || isFiltering}
                                 isCalculating={initialLoading}
                                 pagination={pagination}
-                                summaryData={summaryData} // <-- MODIFIKASI: Summary baru
+                                summaryData={summaryData} 
                                 handleTableChange={handleTableChange}
                                 tableScrollX={tableScrollX}
                                 rowClassName={getRowClassName}
@@ -310,19 +285,17 @@ const BukuPage = () => {
                 </TabPane>
 
                 <TabPane tab={<Space><PullRequestOutlined /> Riwayat Stok</Space>} key="2">
-                    {/* Komponen ini sudah diupdate di request sebelumnya untuk menangani plate */}
                     <StokHistoryTab />
                 </TabPane>
             </Tabs>
 
-            {/* --- MODIFIKASI: Props untuk Modal --- */}
             {isModalOpen && <BukuForm open={isModalOpen} onCancel={handleCloseModal} initialValues={editingPlate} />}
             {isStokModalOpen && <StokFormModal open={isStokModalOpen} onCancel={handleCloseStokModal} plate={stokPlate} />} 
             {isPreviewModalVisible && (
                 <PdfPreviewModal
                     visible={isPreviewModalVisible}
                     onClose={handleClosePreviewModal}
-                    pdfBlobUrl={pdfPreviewUrl} // <-- Pastikan PdfPreviewModal menerima 'pdfBlobUrl'
+                    pdfBlobUrl={pdfPreviewUrl} 
                     fileName={pdfFileName}
                 />
             )}
@@ -330,7 +303,7 @@ const BukuPage = () => {
                 <BulkRestockModal
                     open={isBulkRestockModalOpen}
                     onClose={handleCloseBulkRestockModal}
-                    plateList={plateList} // <-- MODIFIKASI: ganti nama prop
+                    plateList={plateList} 
                 />
             )}
         </Content>

@@ -98,23 +98,39 @@ export default function TransaksiJualPage() {
     }, [deferredDebouncedSearch, deferredSelectedStatus, deferredDateRange]);
 
     // --- Filter Data (TAB 1) ---
+  // ... kode sebelumnya ...
+
+    // --- Filter Data (TAB 1) ---
     const filteredTransaksi = useMemo(() => {
         let data = [...deferredAllTransaksi]; // Salin array
 
         if (deferredDateRange) {
             const [startDate, endDate] = deferredDateRange;
             if (startDate && endDate) {
-                const start = startDate.startOf('day');
-                const end = endDate.endOf('day');
+                // HAPUS bagian startOf/endOf manual dengan manipulasi detik
+                // const start = startDate.startOf('day');
+                // const end = endDate.endOf('day');
+
                 data = data.filter((tx) => {
                     const txDate = dayjs(tx.tanggal);
-                    // Handle invalid dates & ensure inclusivity
-                    return tx.tanggal && txDate.isValid() && txDate.isAfter(start.subtract(1, 'second')) && txDate.isBefore(end.add(1, 'second'));
+                    
+                    // Validasi tanggal
+                    if (!tx.tanggal || !txDate.isValid()) return false;
+
+                    // --- LOGIKA BARU ---
+                    // Gunakan granularitas 'day' agar inklusif (termasuk hari H) dan akurat
+                    // Artinya: Apakah txDate >= startDate (secara hari) DAN txDate <= endDate (secara hari)
+                    
+                    const isAfterOrSameStart = txDate.isSame(startDate, 'day') || txDate.isAfter(startDate, 'day');
+                    const isBeforeOrSameEnd = txDate.isSame(endDate, 'day') || txDate.isBefore(endDate, 'day');
+
+                    return isAfterOrSameStart && isBeforeOrSameEnd;
                 });
             }
         }
 
         if (deferredSelectedStatus.length > 0) {
+// ... sisa kode sama ...
             data = data.filter((tx) => deferredSelectedStatus.includes(normalizeStatus(tx.statusPembayaran)));
         }
 

@@ -49,7 +49,7 @@ const BukuTableComponent = ({
                 {/* --- UBAH: Span diubah dari 8 menjadi 6 --- */}
                 <Col xl={8} md={6} sm={12} xs={24}>
                      <Card size="small" bordered={false} style={{ backgroundColor: '#f0f2f5', width: '100%' }}>
-                        <Typography.Text strong>Total Aset (Hrg. Jual)</Typography.Text>
+                        <Typography.Text strong>Total Aset (Hrg. Beli)</Typography.Text>
                         <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
                             {isCalculating ? <Spin size="small" /> : currencyFormatter(summaryData.totalAsset)}
                         </Title>

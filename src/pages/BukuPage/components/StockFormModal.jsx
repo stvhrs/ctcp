@@ -29,7 +29,7 @@ const StokFormModal = ({ open, onCancel, plate }) => {
             // 2. Filter berdasarkan 'plateId' yang sama dengan plate.id (ID asli plate)
             const bookHistoryRef = query(
                 ref(db, 'historiStok'),
-                orderByChild('id'),
+                orderByChild('plateId'),
                 equalTo(plate.id) // <-- Memfilter berdasarkan ID asli plate
             );
 

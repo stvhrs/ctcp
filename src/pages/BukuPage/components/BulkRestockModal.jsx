@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Modal, Form, Input, InputNumber, Button, message, Spin, Alert, Typography, Select, Space, Divider, Card, Row, Col, Statistic
+    Modal, Form, Input, InputNumber, Button, message, Spin, Alert, Typography, Select, Space, Divider, Card, Row, Col, Statistic, DatePicker
 } from 'antd';
 import { ref, push, serverTimestamp, runTransaction, set } from 'firebase/database';
 import { db } from '../../../api/firebase';
 import { numberFormatter } from '../../../utils/formatters';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs'; 
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -37,142 +38,119 @@ const SubtotalDisplay = ({ index }) => (
     </Form.Item>
 );
 
-// --- MODIFIKASI: Prop diubah ke plateList ---
 const BulkRestockModal = ({ open, onClose, plateList }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    // --- MODIFIKASI: State diubah ke plateId ---
     const [selectedPlateIdsInForm, setSelectedPlateIdsInForm] = useState(new Set());
 
     useEffect(() => {
         if (open) {
             form.resetFields();
-            form.setFieldsValue({ items: [{}] });
-            // --- MODIFIKASI: State diubah ke plateId ---
+            form.setFieldsValue({ 
+                items: [{}],
+                tanggal: dayjs() 
+            });
             setSelectedPlateIdsInForm(new Set());
         }
     }, [open, form]);
 
     const handleFormValuesChange = useCallback((_, allValues) => {
-        // --- MODIFIKASI: Menggunakan 'plateId' ---
         const currentIds = new Set(allValues.items?.map(item => item?.plateId).filter(Boolean) || []);
         setSelectedPlateIdsInForm(currentIds);
     }, []);
 
-    const handleOk = async () => {
-        try {
-            const values = await form.validateFields();
-            const overallRemark = values.overallRemark || '';
-            const items = values.items || [];
-            const validItems = items.filter(
-                // --- MODIFIKASI: Menggunakan 'plateId' ---
-                item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
-            );
+   const handleOk = async () => {
+    try {
+      const values = await form.validateFields();
+      const overallRemark = values.overallRemark || '';
+      const selectedDate = values.tanggal ? values.tanggal.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
+      
+      const items = values.items || [];
+      const validItems = items.filter(
+        item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
+      );
 
-            if (validItems.length === 0) {
-                message.warning('Tambahkan setidaknya satu item plate yang valid.');
-                return;
-            }
-            const hasZeroQuantity = validItems.some(item => Number(item.quantity) === 0);
-            if (hasZeroQuantity) {
-                message.error('Jumlah perubahan tidak boleh 0. Hapus baris atau isi jumlah yang valid.');
-                return;
-            }
+      if (validItems.length === 0) {
+        message.warning('Tambahkan setidaknya satu item plate yang valid.');
+        return;
+      }
+      
+      if (validItems.some(item => Number(item.quantity) === 0)) {
+        message.error('Jumlah perubahan tidak boleh 0.');
+        return;
+      }
 
-            // --- MODIFIKASI: Menggunakan 'plateId' ---
-            const platesToUpdate = validItems.map(item => ({
-                plateId: item.plateId,
-                quantity: Number(item.quantity),
-                specificRemark: item.specificRemark || ''
-            }));
+      setLoading(true);
 
-            if (platesToUpdate.length === 0) {
-                message.info('Tidak ada perubahan stok yang valid untuk disimpan.');
-                return;
-            }
+      const updatePromises = validItems.map(async (item) => {
+        const plateId = item.plateId;
+        const quantity = Number(item.quantity);
+        const specificRemark = item.specificRemark || '';
+        
+        const plateRef = ref(db, `plate/${plateId}`);
 
-            setLoading(true);
-
-            // --- MODIFIKASI: Menggunakan 'plateId' ---
-            const updatePromises = platesToUpdate.map(async ({ plateId, quantity, specificRemark }) => {
-                const jumlahNum = quantity;
-                const plateRef = ref(db, `plate/${plateId}`); // <-- Path ke data plate
-
-                let keteranganGabungan = overallRemark;
-                if (specificRemark) {
-                    keteranganGabungan = overallRemark
-                        ? `${overallRemark} (${specificRemark})`
-                        : specificRemark;
-                }
-                if (!keteranganGabungan) {
-                    keteranganGabungan =
-                        jumlahNum > 0 ? 'Stok Masuk (Borongan)' : 'Stok Keluar (Borongan)';
-                }
-
-                let historyDataForRoot = null;
-
-                // --- MODIFIKASI: Transaksi pada plateRef ---
-                await runTransaction(plateRef, currentData => {
-                    if (!currentData) {
-                        console.warn(`Plate dengan ID ${plateId} tidak ditemukan. Transaksi dibatalkan.`);
-                        return; // Membatalkan transaksi untuk item ini
-                    }
-
-                    const stokSebelum = Number(currentData.stok) || 0;
-                    const stokSesudah = stokSebelum + jumlahNum;
-
-                    // --- MODIFIKASI: Skema histori disesuaikan untuk 'plate' ---
-                    historyDataForRoot = {
-                        plateId: plateId, // <-- Menggunakan plateId
-                        ukuran_plate: `${currentData.ukuran_plate} (${currentData.merek_plate})`, // <-- Judul gabungan
-                        kode_plate: currentData.kode_plate || 'N/A',
-                        merek_plate: currentData.merek_plate || 'N/A', // <-- Menggunakan merek_plate
-                        perubahan: jumlahNum,
-                        stokSebelum,
-                        stokSesudah,
-                        keterangan: keteranganGabungan,
-                        timestamp: serverTimestamp()
-                    };
-
-                    // --- MODIFIKASI: Data plate yang diupdate (tanpa 'historiStok' child) ---
-                    return {
-                        ...currentData,
-                        stok: stokSesudah,
-                        updatedAt: serverTimestamp(),
-                    };
-                });
-
-                if (historyDataForRoot) {
-                    // Simpan ke log riwayat utama
-                    const newHistoryRef = push(ref(db, 'historiStok'));
-                    await set(newHistoryRef, historyDataForRoot);
-                } else {
-                    // Ini terjadi jika transaksi dibatalkan (currentData null)
-                    throw new Error(`Gagal memproses plate ID ${plateId} (mungkin tidak ditemukan).`);
-                }
-            });
-
-            await Promise.all(updatePromises);
-
-            message.success(`Stok untuk ${platesToUpdate.length} plate berhasil diperbarui.`);
-            onClose();
-        } catch (error) {
-            console.error('Kesalahan Restock Borongan:', error);
-            if (error.code && error.message) {
-                message.error(`Gagal update stok: ${error.message} (Kode: ${error.code})`);
-            } else if (error.errorFields) {
-                message.error(
-                    'Periksa kembali input form. Pastikan semua plate dan jumlah terisi dengan benar.'
-                );
-            } else if (error.message) {
-                message.error(`Gagal: ${error.message}`);
-            } else {
-                message.error('Terjadi kesalahan saat menyimpan data.');
-            }
-        } finally {
-            setLoading(false);
+        let keteranganGabungan = overallRemark;
+        if (specificRemark) {
+          keteranganGabungan = overallRemark
+            ? `${overallRemark} (${specificRemark})`
+            : specificRemark;
         }
-    };
+        if (!keteranganGabungan) {
+          keteranganGabungan = quantity > 0 ? 'Stok Masuk (Borongan)' : 'Stok Keluar (Borongan)';
+        }
+
+        // 1. JALANKAN TRANSAKSI 
+        const result = await runTransaction(plateRef, (currentData) => {
+          if (!currentData) return; 
+          
+          const stokLama = Number(currentData.stok) || 0;
+          return {
+            ...currentData,
+            stok: stokLama + quantity,
+            updatedAt: serverTimestamp(),
+          };
+        });
+
+        // 2. JIKA TRANSAKSI SUKSES, SIMPAN HISTORI
+        if (result.committed && result.snapshot.exists()) {
+          const finalData = result.snapshot.val();
+          const stokSesudah = finalData.stok;
+          const stokSebelum = stokSesudah - quantity; 
+
+          // Buat object histori
+          const historyData = {
+            plateId: plateId, 
+            
+            // --- MODIFIKASI: Simpan Merek dan Ukuran terpisah (judul_item dihapus) ---
+            merek_plate: finalData.merek_plate || '',
+            ukuran_plate: finalData.ukuran_plate || '',
+            
+            perubahan: quantity,
+            stokSebelum,
+            stokSesudah,
+            keterangan: keteranganGabungan,
+            tanggal: selectedDate, 
+            timestamp: serverTimestamp() 
+          };
+
+          const newHistoryRef = push(ref(db, 'historiStok')); 
+          await set(newHistoryRef, historyData);
+        } else {
+          console.warn(`Gagal update stok untuk plate ID: ${plateId}`);
+        }
+      });
+
+      await Promise.all(updatePromises);
+
+      message.success(`Stok berhasil diperbarui.`);
+      onClose();
+    } catch (error) {
+      console.error('Error Restock:', error);
+      message.error('Gagal menyimpan data. Cek koneksi atau input Anda.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
     return (
         <Modal
@@ -181,11 +159,11 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
             onCancel={onClose}
             footer={null}
             destroyOnClose
-            width={1000}
+            width={1200}
         >
             <Spin spinning={loading} tip="Menyimpan perubahan stok...">
                 <Alert
-                    message="Tambahkan plate satu per satu ke dalam daftar di bawah. Isi jumlah penambahan (+) atau pengurangan (-). Keterangan Umum akan ditambahkan ke setiap riwayat stok plate."
+                    message="Tambahkan plate satu per satu. Pastikan tanggal dan jumlah stok benar."
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
@@ -197,12 +175,25 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                     onValuesChange={handleFormValuesChange}
                     initialValues={{ items: [{}] }}
                 >
-                    <Form.Item name="overallRemark" label="Keterangan Umum (Opsional)">
-                        <Input.TextArea rows={2} placeholder="Contoh: Stok opname bulanan Q4 2025" />
-                    </Form.Item>
+                    <Row gutter={16}>
+                        <Col xs={24} md={6}>
+                            <Form.Item 
+                                name="tanggal" 
+                                label="Tanggal Transaksi"
+                                rules={[{ required: true, message: 'Pilih tanggal' }]}
+                            >
+                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                            </Form.Item>
+                        </Col>
+                        <Col xs={24} md={18}>
+                            <Form.Item name="overallRemark" label="Keterangan Umum (Opsional)">
+                                <Input placeholder="Contoh: Stok opname bulanan Q4 2025" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>
-                        Item Plate
+                    <Typography.Title level={5} style={{ marginTop: 8, marginBottom: 8 }}>
+                        Daftar Item Plate
                     </Typography.Title>
 
                     <Form.List name="items">
@@ -210,12 +201,13 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                             <>
                                 <div
                                     style={{
-                                        maxHeight: '50vh',
+                                        maxHeight: '55vh', 
                                         overflowY: 'auto',
                                         marginBottom: 16,
                                         border: '1px solid #d9d9d9',
-                                        borderRadius: 2,
-                                        padding: 8
+                                        borderRadius: 4,
+                                        padding: 12,
+                                        backgroundColor: '#fafafa'
                                     }}
                                 >
                                     {fields.map(({ key, name, ...restField }, index) => (
@@ -223,9 +215,11 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                                             key={key}
                                             size="small"
                                             style={{
-                                                marginBottom: 16,
-                                                backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9f9f9'
+                                                marginBottom: 12,
+                                                backgroundColor: '#fff',
+                                                border: '1px solid #e8e8e8'
                                             }}
+                                            bodyStyle={{ padding: '12px' }}
                                             extra={
                                                 fields.length > 0 ? (
                                                     <Button
@@ -238,10 +232,9 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                                             }
                                         >
                                             <Row gutter={[16, 0]}>
-                                                <Col xs={24} md={10} lg={8}>
+                                                <Col xs={24} md={10} lg={9}>
                                                     <Form.Item
                                                         {...restField}
-                                                        // --- MODIFIKASI: field diubah ke 'plateId' ---
                                                         name={[name, 'plateId']}
                                                         label={`Item #${index + 1}: Plate`}
                                                         rules={[{ required: true, message: 'Pilih plate' }]}
@@ -261,29 +254,18 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                                                                     .toLowerCase()
                                                                     .localeCompare((b?.children?.toString() ?? '').toLowerCase())
                                                             }
-                                                            // --- MODIFIKASI: Cek 'plateList' ---
                                                             disabled={!plateList || plateList.length === 0}
-                                                            notFoundContent={
-                                                                !plateList || plateList.length === 0 ? (
-                                                                    <Spin size="small" />
-                                                                ) : (
-                                                                    'Plate tidak ditemukan'
-                                                                )
-                                                            }
                                                         >
-                                                            {/* --- MODIFIKASI: Loop 'plateList' --- */}
                                                             {plateList?.map(plate => (
                                                                 <Option
                                                                     key={plate.id}
                                                                     value={plate.id}
                                                                     disabled={
-                                                                        // --- MODIFIKASI: Cek state 'plateId' ---
                                                                         selectedPlateIdsInForm.has(plate.id) &&
                                                                         form.getFieldValue(['items', name, 'plateId']) !== plate.id
                                                                     }
                                                                 >
-                                                                    {/* --- MODIFIKASI: Tampilan Opsi Dropdown --- */}
-                                                                    {`${plate.ukuran_plate} (${plate.merek_plate})`} (Stok: {numberFormatter(plate.stok)})
+                                                                    {`${plate.merek_plate} ${plate.ukuran_plate}`} (Stok: {numberFormatter(plate.stok)})
                                                                 </Option>
                                                             ))}
                                                         </Select>
@@ -311,7 +293,7 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                                                     </Form.Item>
                                                 </Col>
 
-                                                <Col xs={24} md={6} lg={10}>
+                                                <Col xs={24} md={6} lg={9}>
                                                     <Form.Item
                                                         {...restField}
                                                         name={[name, 'specificRemark']}
@@ -332,7 +314,6 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                                         onClick={() => add()}
                                         block
                                         icon={<PlusOutlined />}
-                                        // --- MODIFIKASI: Cek 'plateList' ---
                                         disabled={!plateList || plateList.length === 0}
                                     >
                                         Tambah Item Plate
@@ -353,30 +334,29 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
                             const items = getFieldValue('items') || [];
                             let totalQtyChange = 0;
                             items
-                                // --- MODIFIKASI: Cek 'plateId' ---
                                 .filter(it => it && it.plateId && it.quantity !== null && it.quantity !== undefined)
                                 .forEach(it => {
                                     totalQtyChange += Number(it.quantity || 0);
                                 });
                             return (
                                 <>
-                                    <Divider />
+                                    <Divider style={{ margin: '12px 0' }} />
                                     <Row justify="end">
                                         <Col xs={12} sm={8} md={6}>
                                             <Statistic
                                                 title="Total Perubahan Qty"
                                                 value={totalQtyChange}
                                                 formatter={numberFormatter}
+                                                valueStyle={{ fontSize: 18 }}
                                             />
                                         </Col>
                                     </Row>
-                                    <Divider />
                                 </>
                             );
                         }}
                     </Form.Item>
 
-                    <Row justify="end" style={{ marginTop: 24 }}>
+                    <Row justify="end" style={{ marginTop: 16 }}>
                         <Col>
                             <Space>
                                 <Button onClick={onClose} disabled={loading}>

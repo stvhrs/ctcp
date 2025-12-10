@@ -1,8 +1,6 @@
 // ================================
 // FILE: src/pages/plate/components/BukuForm.jsx
-// - MODIFIKASI: Disederhanakan total sesuai permintaan.
-// - HANYA 5 field: kode, ukuran, merek, harga, stok.
-// - Hapus Firebase Storage, HET, Diskon, Kategori, historiStok.
+// - UPDATE: Stok dikunci (disabled) saat mode Edit agar history tidak rusak.
 // ================================
 
 import React, { useState, useEffect } from 'react';
@@ -23,13 +21,14 @@ import {
 import { ref, update, push, serverTimestamp, remove, set } from 'firebase/database';
 import { db } from '../../../api/firebase';
 
-const { Text } = Typography;
-
 const BukuForm = ({ open, onCancel, initialValues }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    
+    // Cek apakah sedang mode edit
     const isEditing = !!initialValues;
+    
     const screens = Grid.useBreakpoint();
 
     useEffect(() => {
@@ -49,25 +48,34 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
     const handleSubmit = async (values) => {
         setLoading(true);
 
+        const identitasItem = `${values.ukuran_plate} (${values.merek_plate})`;
+
         if (isEditing) {
             message.loading({ content: 'Memperbarui plate...', key: 'update' });
             try {
                 const bookRef = ref(db, `plate/${initialValues.id}`);
+                
+                // KITA HANYA UPDATE DATA MASTER (Tanpa Stok)
+                // Stok dibiarkan apa adanya dari database (security measure)
                 const updateData = {
-                    ...values,
+                    merek_plate: values.merek_plate,
+                    ukuran_plate: values.ukuran_plate,
+                    harga_plate: values.harga_plate,
                     updatedAt: serverTimestamp(),
-                    createdAt: initialValues.createdAt || serverTimestamp(),
+                    // Stok tidak di-include di updateData agar aman, 
+                    // tapi kalaupun terkirim, UI sudah memblokirnya.
                 };
 
                 await update(bookRef, updateData);
 
-                message.success({ content: `Plate "${values.kode_plate}" berhasil diperbarui.`, key: 'update' });
+                message.success({ content: `Plate "${identitasItem}" berhasil diperbarui.`, key: 'update' });
                 handleCloseModal();
             } catch (error) {
                 console.error('Gagal memperbarui plate:', error);
                 message.error({ content: 'Gagal memperbarui plate: ' + error.message, key: 'update' });
             }
         } else {
+            // ... (Kode Simpan Baru tetap sama) ...
             message.loading({ content: 'Menyimpan plate baru...', key: 'create' });
             try {
                 const newBookRef = push(ref(db, 'plate'));
@@ -83,7 +91,7 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
 
                 await set(newBookRef, newData);
 
-                message.success({ content: `Plate "${values.kode_plate}" berhasil dibuat.`, key: 'create' });
+                message.success({ content: `Plate "${identitasItem}" berhasil dibuat.`, key: 'create' });
                 handleCloseModal();
             } catch (error) {
                 console.error('Gagal menyimpan plate baru:', error);
@@ -99,7 +107,7 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
         setDeleting(true);
         try {
             await remove(ref(db, `plate/${initialValues.id}`));
-            message.success(`Plate "${initialValues.kode_plate}" berhasil dihapus.`);
+            message.success(`Plate "${initialValues.ukuran_plate}" berhasil dihapus.`);
             handleCloseModal();
         } catch (error) {
             console.error('Delete error:', error);
@@ -122,6 +130,7 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
             min={0}
             formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             parser={(value) => value.replace(/Rp\s?|(,*)/g, '')}
+            placeholder="Input harga beli..."
         />
     );
 
@@ -136,15 +145,6 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
         >
             <Form form={form} layout="vertical" onFinish={handleSubmit}>
                 <Row gutter={16}>
-                    <Col sm={12} xs={24}>
-                        <Form.Item
-                            name="kode_plate"
-                            label="Kode Plate"
-                            rules={[{ required: true, message: 'Kode Plate harus diisi' }]}
-                        >
-                            <Input placeholder="Contoh: PLT-001" readOnly={isEditing} />
-                        </Form.Item>
-                    </Col>
                     <Col sm={12} xs={24}>
                         <Form.Item
                             name="merek_plate"
@@ -166,8 +166,8 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
                     <Col sm={12} xs={24}>
                         <Form.Item
                             name="harga_plate"
-                            label="Harga Plate"
-                            rules={[{ required: true, message: 'Harga Plate harus diisi' }]}
+                            label="Harga Beli Plate" 
+                            rules={[{ required: true, message: 'Harga Beli harus diisi' }]}
                         >
                             {priceInput}
                         </Form.Item>
@@ -175,10 +175,16 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
                     <Col sm={12} xs={24}>
                         <Form.Item
                             name="stok"
-                            label="Stok"
-                            rules={[{ required: true, message: 'Stok harus diisi' }]}
+                            label={isEditing ? "Stok (Gunakan menu Update Stok)" : "Stok Awal"}
+                            rules={[{ required: !isEditing, message: 'Stok harus diisi' }]}
                         >
-                            <InputNumber style={{ width: '100%' }} placeholder="Stok saat ini" min={0} />
+                            {/* MODIFIKASI: Input Number diberi properti disabled={isEditing} */}
+                            <InputNumber 
+                                style={{ width: '100%', color: isEditing ? '#000' : undefined }} 
+                                placeholder="Stok saat ini" 
+                                min={0}
+                                disabled={isEditing} 
+                            />
                         </Form.Item>
                     </Col>
                 </Row>
@@ -188,7 +194,7 @@ const BukuForm = ({ open, onCancel, initialValues }) => {
                         {isEditing && (
                             <Popconfirm
                                 title="Yakin ingin menghapus plate ini?"
-                                description={`Plate "${initialValues?.kode_plate || 'ini'}" akan dihapus permanen.`}
+                                description={`Plate "${initialValues?.ukuran_plate || 'ini'}" akan dihapus permanen.`}
                                 onConfirm={handleDelete}
                                 okText="Ya, Hapus"
                                 cancelText="Batal"
