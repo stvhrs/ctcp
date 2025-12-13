@@ -7,7 +7,7 @@ import { db } from '../../../api/firebase';
 import { numberFormatter } from '../../../utils/formatters';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs'; 
-
+import { updatePlateStockBulk } from '../../../api/stokService'; // Import fungsi baru
 const { Text } = Typography;
 const { Option } = Select;
 
@@ -59,98 +59,36 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
         setSelectedPlateIdsInForm(currentIds);
     }, []);
 
-   const handleOk = async () => {
+const handleOk = async () => {
     try {
-      const values = await form.validateFields();
-      const overallRemark = values.overallRemark || '';
-      const selectedDate = values.tanggal ? values.tanggal.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
-      
-      const items = values.items || [];
-      const validItems = items.filter(
-        item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
-      );
+        const values = await form.validateFields();
+        const overallRemark = values.overallRemark || '';
+        const selectedDate = values.tanggal ? values.tanggal.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
 
-      if (validItems.length === 0) {
-        message.warning('Tambahkan setidaknya satu item plate yang valid.');
-        return;
-      }
-      
-      if (validItems.some(item => Number(item.quantity) === 0)) {
-        message.error('Jumlah perubahan tidak boleh 0.');
-        return;
-      }
+        const items = values.items || [];
+        // Filter item valid
+        const validItems = items.filter(
+            item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
+        );
 
-      setLoading(true);
+        if (validItems.length === 0) { /* ... error handling ... */ return; }
+        if (validItems.some(item => Number(item.quantity) === 0)) { /* ... error handling ... */ return; }
 
-      const updatePromises = validItems.map(async (item) => {
-        const plateId = item.plateId;
-        const quantity = Number(item.quantity);
-        const specificRemark = item.specificRemark || '';
-        
-        const plateRef = ref(db, `plate/${plateId}`);
+        setLoading(true);
 
-        let keteranganGabungan = overallRemark;
-        if (specificRemark) {
-          keteranganGabungan = overallRemark
-            ? `${overallRemark} (${specificRemark})`
-            : specificRemark;
-        }
-        if (!keteranganGabungan) {
-          keteranganGabungan = quantity > 0 ? 'Stok Masuk (Borongan)' : 'Stok Keluar (Borongan)';
-        }
+        // PANGGIL FUNGSI STANDARD BULK
+        // Note: Kita tidak perlu loop manual di sini karena sudah dihandle service
+        await updatePlateStockBulk(validItems, overallRemark, selectedDate);
 
-        // 1. JALANKAN TRANSAKSI 
-        const result = await runTransaction(plateRef, (currentData) => {
-          if (!currentData) return; 
-          
-          const stokLama = Number(currentData.stok) || 0;
-          return {
-            ...currentData,
-            stok: stokLama + quantity,
-            updatedAt: serverTimestamp(),
-          };
-        });
-
-        // 2. JIKA TRANSAKSI SUKSES, SIMPAN HISTORI
-        if (result.committed && result.snapshot.exists()) {
-          const finalData = result.snapshot.val();
-          const stokSesudah = finalData.stok;
-          const stokSebelum = stokSesudah - quantity; 
-
-          // Buat object histori
-          const historyData = {
-            plateId: plateId, 
-            
-            // --- MODIFIKASI: Simpan Merek dan Ukuran terpisah (judul_item dihapus) ---
-            merek_plate: finalData.merek_plate || '',
-            ukuran_plate: finalData.ukuran_plate || '',
-            
-            perubahan: quantity,
-            stokSebelum,
-            stokSesudah,
-            keterangan: keteranganGabungan,
-            tanggal: selectedDate, 
-            timestamp: serverTimestamp() 
-          };
-
-          const newHistoryRef = push(ref(db, 'historiStok')); 
-          await set(newHistoryRef, historyData);
-        } else {
-          console.warn(`Gagal update stok untuk plate ID: ${plateId}`);
-        }
-      });
-
-      await Promise.all(updatePromises);
-
-      message.success(`Stok berhasil diperbarui.`);
-      onClose();
+        message.success(`Stok berhasil diperbarui.`);
+        onClose();
     } catch (error) {
-      console.error('Error Restock:', error);
-      message.error('Gagal menyimpan data. Cek koneksi atau input Anda.');
+        console.error('Error Restock:', error);
+        message.error('Gagal menyimpan data.');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
     return (
         <Modal

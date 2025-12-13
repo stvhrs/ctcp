@@ -442,16 +442,7 @@ export default function TransaksiJualForm({
                                                         <InputNumber min={1} style={{ width: '100%' }} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col xs={12} md={6}>
-                                                    <Form.Item {...restField} name={[name, 'hargaBeli']} label="Harga Beli" initialValue={0}>
-                                                        {/* Read Only - dari Master */}
-                                                        <InputNumber 
-                                                            disabled 
-                                                            style={{ width: '100%', color: '#666', cursor: 'not-allowed' }} 
-                                                            formatter={rupiahFormatter} parser={rupiahParser} 
-                                                        />
-                                                    </Form.Item>
-                                                </Col>
+                                                
                                                 <Col xs={12} md={6}>
                                                     <Form.Item {...restField} name={[name, 'hargaJual']} label="Harga Jual" rules={[{ required: true, message: 'Wajib' }]}>
                                                         {/* Input Manual Admin */}

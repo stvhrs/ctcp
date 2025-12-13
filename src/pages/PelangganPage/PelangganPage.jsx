@@ -154,7 +154,7 @@ export default function PelangganPage() {
     return (
         <Layout>
             <Content style={{ padding: '24px', backgroundColor: '#f0f2f5' }}>
-                <Title level={3} style={{ marginBottom: 24 }}>Manajemen Pelanggan</Title>
+                {/* <Title level={3} style={{ marginBottom: 24 }}>Manajemen Pelanggan</Title> */}
                 <Card>
                     <Row justify="space-between" align="middle" gutter={[16, 16]} style={{ marginBottom: 24 }}>
                         <Col xs={24} sm={12}>
