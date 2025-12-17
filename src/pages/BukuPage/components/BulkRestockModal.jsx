@@ -7,7 +7,7 @@ import { db } from '../../../api/firebase';
 import { numberFormatter } from '../../../utils/formatters';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs'; 
-import { updatePlateStockBulk } from '../../../api/stokService'; // Import fungsi baru
+import { updatePlateStock } from '../../../api/stokService'; // Import fungsi baru
 const { Text } = Typography;
 const { Option } = Select;
 
@@ -78,7 +78,7 @@ const handleOk = async () => {
 
         // PANGGIL FUNGSI STANDARD BULK
         // Note: Kita tidak perlu loop manual di sini karena sudah dihandle service
-        await updatePlateStockBulk(validItems, overallRemark, selectedDate);
+        await updatePlateStock(validItems, overallRemark, selectedDate);
 
         message.success(`Stok berhasil diperbarui.`);
         onClose();

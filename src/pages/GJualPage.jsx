@@ -39,7 +39,7 @@ const generateRandomSalesTransaction = (lastInvoiceNumber) => {
     if (typeof lastInvoiceNumber === 'string' && lastInvoiceNumber.startsWith(`INV/${year}/${month}/`)) {
     // ----------------------------------------------------
         try {
-            const lastNumStr = lastInvoiceNumber.split('/').pop();
+            const lastNumStr = lastInvoiceNumber.split('-').pop();
             const lastNum = parseInt(lastNumStr, 10);
             if (!isNaN(lastNum)) {
                 nextNum = lastNum + 1;

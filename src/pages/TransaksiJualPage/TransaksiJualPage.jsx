@@ -3,6 +3,8 @@
 // MODIFIKASI:
 // 1. Mengganti @react-pdf-viewer dengan <iframe /> native browser.
 // 2. Memastikan fitur Cetak (Print) bawaan browser bisa digunakan langsung.
+// 3. Menambahkan kolom 'jumlahTerbayar'.
+// 4. Menambahkan fitur Sortir dan Filter pada header kolom.
 // ================================
 
 import React, { useEffect, useState, useMemo, useCallback, useDeferredValue } from 'react';
@@ -20,10 +22,6 @@ import 'dayjs/locale/id';
 // Impor PDF Generator Library
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-// --- HAPUS: Import React PDF Viewer ---
-// import { Worker, Viewer } from '@react-pdf-viewer/core';
-// import '@react-pdf-viewer/core/lib/styles/index.css';
 
 // Hooks & Components
 import useDebounce from '../../hooks/useDebounce'; 
@@ -92,7 +90,6 @@ export default function TransaksiJualPage() {
     const [txPdfTitle, setTxPdfTitle] = useState('');
     const [isTxPdfGenerating, setIsTxPdfGenerating] = useState(false);
     const [txPdfFileName, setTxPdfFileName] = useState('laporan.pdf');
-    // Tambahan: State URL untuk Iframe
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
 
     // --- Defer State ---
@@ -105,7 +102,7 @@ export default function TransaksiJualPage() {
         return !!deferredDebouncedSearch || deferredSelectedStatus.length > 0 || !!deferredDateRange;
     }, [deferredDebouncedSearch, deferredSelectedStatus, deferredDateRange]);
 
-    // --- Filter Data Logic ---
+    // --- Filter Data Logic (Global Filter) ---
     const filteredTransaksi = useMemo(() => {
         let data = [...deferredAllTransaksi]; 
 
@@ -167,7 +164,10 @@ export default function TransaksiJualPage() {
     const handleDateChange = useCallback((dates) => { setDateRange(dates); setPagination(prev => ({ ...prev, current: 1 })); }, []);
     const handleStatusToggle = useCallback((status) => { setSelectedStatus(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]); setPagination(prev => ({ ...prev, current: 1 })); }, []);
     const resetFilters = useCallback(() => { setSearchText(''); setSelectedStatus([]); setDateRange(null); setPagination(prev => ({ ...prev, current: 1 })); }, []);
-    const handleTableChange = useCallback((paginationConfig) => { setPagination(paginationConfig); }, []);
+    const handleTableChange = useCallback((paginationConfig, filters, sorter) => { 
+        setPagination(paginationConfig); 
+        // Logic tambahan jika ingin handle server-side filtering/sorting bisa disini
+    }, []);
 
     // --- Handlers Modals ---
     const handleOpenCreate = useCallback(() => { setFormMode('create'); setEditingTx(null); setIsFormModalOpen(true); }, []);
@@ -183,7 +183,6 @@ export default function TransaksiJualPage() {
         setIsTxPdfGenerating(false); 
         setTxPdfBlob(null); 
         setTxPdfTitle(''); 
-        // Bersihkan URL object untuk mencegah memory leak
         if (pdfPreviewUrl) {
             URL.revokeObjectURL(pdfPreviewUrl);
             setPdfPreviewUrl(null);
@@ -205,11 +204,8 @@ export default function TransaksiJualPage() {
             const dataUri = generateNotaPDF(tx);
             const blob = await fetch(dataUri).then(r => r.blob());
             setTxPdfBlob(blob);
-            
-            // Buat URL untuk Iframe
             const url = URL.createObjectURL(blob);
             setPdfPreviewUrl(url);
-
         } catch (err) {
             console.error("Gagal generate nota PDF:", err);
             message.error('Gagal membuat PDF nota.');
@@ -274,8 +270,20 @@ export default function TransaksiJualPage() {
                 const filterInfo = []; if (deferredDateRange) filterInfo.push(`Tgl: ${deferredDateRange[0].format('DD/MM/YY')} - ${deferredDateRange[1].format('DD/MM/YY')}`); if (deferredSelectedStatus.length > 0) filterInfo.push(`Status: ${deferredSelectedStatus.join(', ')}`); if (deferredDebouncedSearch) filterInfo.push(`Cari: "${deferredDebouncedSearch}"`);
                 if (filterInfo.length > 0) doc.text(`Filter Aktif: ${filterInfo.join(' | ')}`, 14, 28); else { doc.text('Filter Aktif: Menampilkan Semua', 14, 28); }
                 autoTable(doc, { startY: startY, body: [['Total Tagihan', formatCurrency(recapData.totalTagihan)], ['Total Terbayar', formatCurrency(recapData.totalTerbayar)], ['Total Sisa Tagihan', formatCurrency(recapData.sisaTagihan)]], theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } }, didDrawCell: (data) => { if (data.section === 'body') { if (data.row.index === 1) data.cell.styles.textColor = [40, 167, 69]; if (data.row.index === 2) data.cell.styles.textColor = [220, 53, 69]; } } });
-                const tableHead = ['Tanggal', 'ID Transaksi', 'Pelanggan', 'Total Tagihan', 'Sisa Tagihan', 'Status']; const tableBody = filteredTransaksi.map(tx => { const sisa = (tx.totalTagihan || 0) - (tx.jumlahTerbayar || 0); return [formatDate(tx.tanggal), tx.nomorInvoice || tx.id, tx.namaPelanggan || '-', formatCurrency(tx.totalTagihan), formatCurrency(sisa), normalizeStatus(tx.statusPembayaran)]; });
-                autoTable(doc, { head: [tableHead], body: tableBody, startY: doc.lastAutoTable.finalY + 10, theme: 'striped', headStyles: { fillColor: [41, 128, 185] }, styles: { fontSize: 8, cellPadding: 2 }, columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' } }, foot: [['', '', 'TOTAL', formatCurrency(recapData.totalTagihan), formatCurrency(recapData.sisaTagihan), '']], footStyles: { fontStyle: 'bold', halign: 'right', fillColor: [230, 230, 230], textColor: 0 } });
+                const tableHead = ['Tanggal', 'ID Transaksi', 'Pelanggan', 'Total Tagihan', 'Terbayar', 'Sisa Tagihan', 'Status']; 
+                const tableBody = filteredTransaksi.map(tx => { 
+                    const sisa = (tx.totalTagihan || 0) - (tx.jumlahTerbayar || 0); 
+                    return [
+                        formatDate(tx.tanggal), 
+                        tx.nomorInvoice || tx.id, 
+                        tx.namaPelanggan || '-', 
+                        formatCurrency(tx.totalTagihan), 
+                        formatCurrency(tx.jumlahTerbayar), // Add Terbayar to PDF
+                        formatCurrency(sisa), 
+                        normalizeStatus(tx.statusPembayaran)
+                    ]; 
+                });
+                autoTable(doc, { head: [tableHead], body: tableBody, startY: doc.lastAutoTable.finalY + 10, theme: 'striped', headStyles: { fillColor: [41, 128, 185] }, styles: { fontSize: 8, cellPadding: 2 }, columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } }, foot: [['', '', 'TOTAL', formatCurrency(recapData.totalTagihan), formatCurrency(recapData.totalTerbayar), formatCurrency(recapData.sisaTagihan), '']], footStyles: { fontStyle: 'bold', halign: 'right', fillColor: [230, 230, 230], textColor: 0 } });
                 
                 const blob = doc.output('blob');
                 setTxPdfBlob(blob);
@@ -288,6 +296,29 @@ export default function TransaksiJualPage() {
             } finally { setIsTxPdfGenerating(false); }
         }, 50);
     }, [filteredTransaksi, recapData, deferredDateRange, deferredSelectedStatus, deferredDebouncedSearch, message]);
+
+
+    // --- Column Filter & Sort Helpers ---
+    // Mengambil value unik dari data untuk opsi filter
+    const uniqueFilters = useMemo(() => {
+        const getFilters = (key) => {
+            const values = filteredTransaksi.map(item => item[key]).filter(Boolean);
+            const unique = [...new Set(values)];
+            return unique.map(val => ({ text: val, value: val })).sort((a, b) => a.text.localeCompare(b.text));
+        };
+        const getStatusFilters = () => {
+            const values = filteredTransaksi.map(item => normalizeStatus(item.statusPembayaran)).filter(Boolean);
+            const unique = [...new Set(values)];
+            return unique.map(val => ({ text: val, value: val }));
+        };
+
+        return {
+            pelanggan: getFilters('namaPelanggan'),
+            id: getFilters('nomorInvoice'), // Gunakan nomorInvoice jika ada, fallback ke ID handled di column
+            keterangan: getFilters('keterangan'),
+            status: getStatusFilters()
+        };
+    }, [filteredTransaksi]);
 
 
     // --- Column Definition ---
@@ -308,16 +339,102 @@ export default function TransaksiJualPage() {
     }, [handleOpenDetailModal, handleOpenEdit, handleGenerateNota]);
 
     const columns = useMemo(() => [
-        { title: 'No.', key: 'index', width: 60, render: (_t, _r, idx) => ((pagination.current - 1) * pagination.pageSize) + idx + 1 },
-        { title: 'Tanggal', dataIndex: 'tanggal', key: 'tanggal', width: 120, render: formatDate, sorter: (a, b) => (a.tanggal || 0) - (b.tanggal || 0) },
-        { title: 'ID Transaksi', dataIndex: 'id', key: 'id', width: 180, render: (id) => <small>{id}</small> },
-        { title: 'Pelanggan', dataIndex: 'namaPelanggan', key: 'namaPelanggan', width: 220, sorter: (a, b) => (a.namaPelanggan || '').localeCompare(b.namaPelanggan || ''), render: (val, record) => (<span>{val} {record.pelangganIsSpesial ? <Tag color="gold">Spesial</Tag> : null}</span>) },
-        { title: 'Keterangan', dataIndex: 'keterangan', key: 'keterangan', ellipsis: true, render: (v) => v || '-' },
-        { title: 'Total Tagihan', dataIndex: 'totalTagihan', key: 'totalTagihan', align: 'right', width: 150, render: formatCurrency, sorter: (a, b) => (a.totalTagihan || 0) - (b.totalTagihan || 0) },
-        { title: 'Sisa Tagihan', key: 'sisaTagihan', align: 'right', width: 150, render: (_, r) => { const sisa = (r.totalTagihan || 0) - (r.jumlahTerbayar || 0); return <span style={{ color: sisa > 0 ? '#cf1322' : '#3f8600', fontWeight: 600 }}>{formatCurrency(sisa)}</span>; }, sorter: (a, b) => ((a.totalTagihan || 0) - (a.jumlahTerbayar || 0)) - ((b.totalTagihan || 0) - (b.jumlahTerbayar || 0)) },
-        { title: 'Status', dataIndex: 'statusPembayaran', key: 'statusPembayaran', width: 130, render: (statusRaw) => { const status = normalizeStatus(statusRaw); let color = 'default'; if (status === 'Lunas') color = 'green'; else if (status === 'Belum Bayar') color = 'red'; else if (status === 'Sebagian') color = 'orange'; return <Tag color={color}>{status}</Tag>; } },
+        { 
+            title: 'No.', 
+            key: 'index', 
+            width: 60, 
+            render: (_t, _r, idx) => ((pagination.current - 1) * pagination.pageSize) + idx + 1 
+        },
+        { 
+            title: 'Tanggal', 
+            dataIndex: 'tanggal', 
+            key: 'tanggal', 
+            width: 120, 
+            render: formatDate, 
+            sorter: (a, b) => (a.tanggal || 0) - (b.tanggal || 0) 
+        },
+        { 
+            title: 'ID Transaksi', 
+            dataIndex: 'nomorInvoice', // Prioritaskan Invoice
+            key: 'id', 
+            width: 180, 
+            render: (val, record) => <small>{val || record.id}</small>,
+            sorter: (a, b) => (a.nomorInvoice || a.id || '').localeCompare(b.nomorInvoice || b.id || ''),
+            filters: uniqueFilters.id,
+            filterSearch: true,
+            onFilter: (value, record) => (record.nomorInvoice || record.id || '').includes(value)
+        },
+        { 
+            title: 'Pelanggan', 
+            dataIndex: 'namaPelanggan', 
+            key: 'namaPelanggan', 
+            width: 220, 
+            sorter: (a, b) => (a.namaPelanggan || '').localeCompare(b.namaPelanggan || ''), 
+            render: (val, record) => (<span>{val} {record.pelangganIsSpesial ? <Tag color="gold">Spesial</Tag> : null}</span>),
+            filters: uniqueFilters.pelanggan,
+            filterSearch: true,
+            onFilter: (value, record) => (record.namaPelanggan || '').includes(value)
+        },
+        { 
+            title: 'Keterangan', 
+            dataIndex: 'keterangan', 
+            key: 'keterangan', 
+            ellipsis: true, 
+            render: (v) => v || '-',
+            sorter: (a, b) => (a.keterangan || '').localeCompare(b.keterangan || ''),
+            filters: uniqueFilters.keterangan,
+            filterSearch: true,
+            onFilter: (value, record) => (record.keterangan || '').includes(value)
+        },
+        { 
+            title: 'Total Tagihan', 
+            dataIndex: 'totalTagihan', 
+            key: 'totalTagihan', 
+            align: 'right', 
+            width: 150, 
+            render: formatCurrency, 
+            sorter: (a, b) => (a.totalTagihan || 0) - (b.totalTagihan || 0) 
+        },
+        // --- ADDED: Kolom Jumlah Terbayar ---
+        { 
+            title: 'Terbayar', 
+            dataIndex: 'jumlahTerbayar', 
+            key: 'jumlahTerbayar', 
+            align: 'right', 
+            width: 150, 
+            render: (val) => <span style={{ color: '#3f8600' }}>{formatCurrency(val)}</span>, 
+            sorter: (a, b) => (a.jumlahTerbayar || 0) - (b.jumlahTerbayar || 0) 
+        },
+        { 
+            title: 'Sisa Tagihan', 
+            key: 'sisaTagihan', 
+            align: 'right', 
+            width: 150, 
+            render: (_, r) => { 
+                const sisa = (r.totalTagihan || 0) - (r.jumlahTerbayar || 0); 
+                return <span style={{ color: sisa > 0 ? '#cf1322' : '#3f8600', fontWeight: 600 }}>{formatCurrency(sisa)}</span>; 
+            }, 
+            sorter: (a, b) => ((a.totalTagihan || 0) - (a.jumlahTerbayar || 0)) - ((b.totalTagihan || 0) - (b.jumlahTerbayar || 0)) 
+        },
+        { 
+            title: 'Status', 
+            dataIndex: 'statusPembayaran', 
+            key: 'statusPembayaran', 
+            width: 130, 
+            render: (statusRaw) => { 
+                const status = normalizeStatus(statusRaw); 
+                let color = 'default'; 
+                if (status === 'Lunas') color = 'green'; 
+                else if (status === 'Belum Bayar') color = 'red'; 
+                else if (status === 'Sebagian') color = 'orange'; 
+                return <Tag color={color}>{status}</Tag>; 
+            },
+            sorter: (a, b) => (normalizeStatus(a.statusPembayaran)).localeCompare(normalizeStatus(b.statusPembayaran)),
+            filters: uniqueFilters.status,
+            onFilter: (value, record) => normalizeStatus(record.statusPembayaran) === value
+        },
         { title: 'Aksi', key: 'aksi', align: 'center', width: 150, fixed: 'right', render: renderAksi },
-    ], [pagination, renderAksi]);
+    ], [pagination, renderAksi, uniqueFilters]);
 
     const tableScrollX = useMemo(() => columns.reduce((acc, col) => acc + (col.width || 150), 0), [columns]);
 
@@ -393,7 +510,6 @@ export default function TransaksiJualPage() {
                              <Spin size="large" tip="Membuat file PDF..." />
                          </div>
                      ) : pdfPreviewUrl ? (
-                         // --- PERUBAHAN UTAMA: Gunakan Iframe ---
                          <iframe 
                              src={pdfPreviewUrl} 
                              width="100%" 

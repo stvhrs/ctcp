@@ -21,7 +21,7 @@ const BuktiModal = ({ url, isOpen, onClose }) => {
             const objectUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = objectUrl;
-            const fileName = url.split('/').pop().split('?')[0].split('%2F').pop() || 'bukti-transaksi';
+            const fileName = url.split('-').pop().split('?')[0].split('%2F').pop() || 'bukti-transaksi';
             link.setAttribute('download', fileName);
             document.body.appendChild(link);
             link.click();
@@ -44,7 +44,7 @@ const BuktiModal = ({ url, isOpen, onClose }) => {
             const response = await fetch(url);
             if (!response.ok) throw new Error('Gagal mengambil file.');
             const blob = await response.blob();
-            const fileName = url.split('/').pop().split('?')[0].split('%2F').pop() || 'bukti-transaksi';
+            const fileName = url.split('-').pop().split('?')[0].split('%2F').pop() || 'bukti-transaksi';
             const file = new File([blob], fileName, { type: blob.type });
 
             if (navigator.canShare && navigator.canShare({ files: [file] })) {

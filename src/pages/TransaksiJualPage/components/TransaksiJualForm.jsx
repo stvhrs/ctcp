@@ -192,7 +192,7 @@ export default function TransaksiJualForm({
             
             // Validasi Invoice
             if (!data.nomorInvoice || !data.nomorInvoice.startsWith('INV/')) throw new Error('Nomor Invoice invalid.');
-            const parts = data.nomorInvoice.split('/');
+            const parts = data.nomorInvoice.split('-');
             const txKey = (mode === 'edit' && initialTx?.id) ? initialTx.id : `INV-${parts[1]}-${parts[2]}-${parts[3]}`;
 
             // Validasi Pelanggan
