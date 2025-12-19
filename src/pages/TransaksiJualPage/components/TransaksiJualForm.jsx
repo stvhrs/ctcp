@@ -1,6 +1,6 @@
 // ================================
 // FILE: src/pages/transaksi-jual/components/TransaksiJualForm.jsx
-// - FIX: Format Invoice Generator disamakan dengan Validasi (pakai strip '-')
+// - FIX: Auto Generate Invoice ID mengikuti Tanggal yang dipilih (Realtime)
 // ================================
 
 import React, { useEffect, useState } from 'react';
@@ -45,6 +45,10 @@ export default function TransaksiJualForm({
     loadingDependencies
 }) {
     const [form] = Form.useForm();
+    
+    // 1. WATCHER: Memantau perubahan field 'tanggal' secara real-time
+    const selectedTanggal = Form.useWatch('tanggal', form);
+
     const [isSaving, setIsSaving] = useState(false);
     const [selectedPelanggan, setSelectedPelanggan] = useState(null);
     const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(mode === 'create');
@@ -84,7 +88,7 @@ export default function TransaksiJualForm({
             } else if (mode === 'create') {
                 form.resetFields();
                 form.setFieldsValue({
-                    tanggal: dayjs(),
+                    tanggal: dayjs(), // Default hari ini
                     items: [{}],
                     diskonLain: 0,
                     biayaTentu: 0
@@ -95,49 +99,65 @@ export default function TransaksiJualForm({
         }
     }, [mode, initialTx, pelangganList, form, onCancel, open]);
 
-    // ===== Generate nomor invoice =====
+
+    // ===== Generate nomor invoice (MODIFIED: Mengikuti selectedTanggal) =====
     useEffect(() => {
-        if (mode !== 'create' || !open || !isGeneratingInvoice) return;
+        // Hanya jalankan jika mode create, modal terbuka, dan tanggal sudah terisi/dipilih
+        if (mode !== 'create' || !open || !selectedTanggal) return;
+
         let isMounted = true;
-        const generateInvoiceNumber = async () => {
+        
+        // Gunakan timeout untuk debounce (cegah spam request jika user ganti tanggal cepat)
+        const timeoutId = setTimeout(async () => {
             try {
-                const now = dayjs();
-                const year = now.format('YYYY');
-                const month = now.format('MM');
+                // Ambil Tahun & Bulan dari tanggal yang DIPILIH USER
+                const year = selectedTanggal.format('YYYY');
+                const month = selectedTanggal.format('MM');
                 const keyPrefix = `INV-${year}-${month}-`;
+
                 const txRef = ref(db, 'transaksiJualPlate');
+                // Query cari invoice dengan prefix tahun-bulan yang sama
                 const qy = query(txRef, orderByKey(), startAt(keyPrefix), endAt(keyPrefix + '\uf8ff'));
+                
                 const snapshot = await get(qy);
                 let nextNum = 1;
+
                 if (snapshot.exists()) {
                     const keys = Object.keys(snapshot.val());
+                    // Sort untuk cari nomor urut terakhir
                     keys.sort((a, b) => {
                         const numA = parseInt(a.split('-').pop() || '0', 10);
                         const numB = parseInt(b.split('-').pop() || '0', 10);
                         return numA - numB;
                     });
+                    
                     const lastKey = keys[keys.length - 1];
                     const lastNumStr = lastKey?.split('-').pop();
+                    
                     if (lastNumStr && !isNaN(parseInt(lastNumStr, 10))) {
                         nextNum = parseInt(lastNumStr, 10) + 1;
                     }
                 }
+
                 const newNumStr = String(nextNum).padStart(4, '0');
-                
-                // --- PERBAIKAN DI SINI ---
-                // Gunakan strip (-) bukan slash (/) agar sesuai dengan validasi split('-')
                 const displayInvoice = `INV-${year}-${month}-${newNumStr}`; 
                 
-                if (isMounted) form.setFieldsValue({ nomorInvoice: displayInvoice });
+                if (isMounted) {
+                    // Update field nomor invoice di form
+                    form.setFieldsValue({ nomorInvoice: displayInvoice });
+                }
             } catch (e) {
                 console.error("Error invoice:", e);
             } finally {
                 if (isMounted) setIsGeneratingInvoice(false);
             }
+        }, 500); // Delay 500ms
+
+        return () => { 
+            isMounted = false; 
+            clearTimeout(timeoutId);
         };
-        generateInvoiceNumber();
-        return () => { isMounted = false; };
-    }, [mode, open, isGeneratingInvoice, form]); // Added form dependency
+    }, [mode, open, selectedTanggal, form]); // Dependency ke selectedTanggal agar trigger ulang saat tanggal berubah
 
 
     // ===== Helper Harga (Ambil Harga Beli dari Master) =====
@@ -193,6 +213,7 @@ export default function TransaksiJualForm({
                 throw new Error('Nomor Invoice invalid (Format harus INV-YYYY-MM-XXXX).');
             }
             const parts = data.nomorInvoice.split('-');
+            // Gunakan ID lama jika Edit, atau ID baru dari form jika Create
             const txKey = (mode === 'edit' && initialTx?.id) ? initialTx.id : `INV-${parts[1]}-${parts[2]}-${parts[3]}`;
 
             // Validasi Pelanggan
@@ -265,7 +286,6 @@ export default function TransaksiJualForm({
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
                 };
-                // MODIFIKASI: TIDAK ADA PENGURANGAN STOK
             } else {
                 // EDIT MODE
                 if (!initialTx?.id) throw new Error("ID transaksi edit hilang.");
@@ -274,7 +294,6 @@ export default function TransaksiJualForm({
                     ...baseTx,
                     updatedAt: serverTimestamp()
                 };
-                // MODIFIKASI: TIDAK ADA PENYESUAIAN STOK
             }
 
             await update(ref(db), updates);
@@ -300,8 +319,7 @@ export default function TransaksiJualForm({
         try {
             const updates = {};
             updates[`transaksiJualPlate/${initialTx.id}`] = null;
-            // MODIFIKASI: TIDAK ADA PENGEMBALIAN STOK
-
+            
             await update(ref(db), updates);
             message.success({ content: 'Transaksi dihapus.', key: 'del_tx' });
             onSuccess?.();
@@ -342,6 +360,7 @@ export default function TransaksiJualForm({
             open={open}
             onCancel={onCancel}
             width={900}
+            style={{ top: 20 }} 
             confirmLoading={isSaving}
             destroyOnClose
             footer={null}
@@ -363,7 +382,7 @@ export default function TransaksiJualForm({
                         </Col>
                         <Col xs={24} md={12}>
                             <Form.Item name="tanggal" label="Tanggal" rules={[{ required: true }]}>
-                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" allowClear={false} />
                             </Form.Item>
                         </Col>
                     </Row>

@@ -360,7 +360,7 @@ export default function TransaksiJualPage() {
             width: 180, 
             render: (val, record) => <small>{val || record.id}</small>,
             sorter: (a, b) => (a.nomorInvoice || a.id || '').localeCompare(b.nomorInvoice || b.id || ''),
-            filters: uniqueFilters.id,
+            // filters: uniqueFilters.id,
             filterSearch: true,
             onFilter: (value, record) => (record.nomorInvoice || record.id || '').includes(value)
         },
@@ -371,7 +371,7 @@ export default function TransaksiJualPage() {
             width: 220, 
             sorter: (a, b) => (a.namaPelanggan || '').localeCompare(b.namaPelanggan || ''), 
             render: (val, record) => (<span>{val} {record.pelangganIsSpesial ? <Tag color="gold">Spesial</Tag> : null}</span>),
-            filters: uniqueFilters.pelanggan,
+            // filters: uniqueFilters.pelanggan,
             filterSearch: true,
             onFilter: (value, record) => (record.namaPelanggan || '').includes(value)
         },
@@ -382,7 +382,7 @@ export default function TransaksiJualPage() {
             ellipsis: true, 
             render: (v) => v || '-',
             sorter: (a, b) => (a.keterangan || '').localeCompare(b.keterangan || ''),
-            filters: uniqueFilters.keterangan,
+            // filters: uniqueFilters.keterangan,
             filterSearch: true,
             onFilter: (value, record) => (record.keterangan || '').includes(value)
         },
