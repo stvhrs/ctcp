@@ -1,18 +1,14 @@
 // ================================
 // FILE: src/pages/transaksi-jual/components/TransaksiJualForm.jsx
-// - MODIFIKASI: Hapus Daerah
-// - MODIFIKASI: Hapus Kode Plate di Dropdown (Merek + Ukuran + Stok)
-// - MODIFIKASI: Item -> Hapus Diskon, Tambah Pekerjaan
-// - MODIFIKASI: Split Harga -> Harga Beli (Auto) & Harga Jual (Manual)
-// - MODIFIKASI: HAPUS LOGIC UPDATE STOCK (Hanya simpan transaksi)
+// - FIX: Format Invoice Generator disamakan dengan Validasi (pakai strip '-')
 // ================================
 
 import React, { useEffect, useState } from 'react';
 import {
     Modal,
     Form, Input, InputNumber, Select, Button,
-    Row, Col, Spin, Popconfirm, Divider, Card, Statistic,DatePicker,message,
-    Typography, 
+    Row, Col, Spin, Popconfirm, Divider, Card, Statistic, DatePicker, message,
+    Typography,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { db } from '../../../api/firebase';
@@ -60,14 +56,14 @@ export default function TransaksiJualForm({
                 try {
                     const p = pelangganList.find((x) => x.id === initialTx.idPelanggan) || null;
                     setSelectedPelanggan(p);
-                    
+
                     const itemsToSet = (initialTx.items && Array.isArray(initialTx.items))
                         ? initialTx.items.map((it) => ({
                             idPlate: it.idPlate,
-                            pekerjaan: it.pekerjaan || '', // <-- Load Pekerjaan
+                            pekerjaan: it.pekerjaan || '',
                             jumlah: it.jumlah,
-                            hargaBeli: it.hargaBeli || 0,   // <-- Load Harga Beli
-                            hargaJual: it.hargaJual || 0,   // <-- Load Harga Jual
+                            hargaBeli: it.hargaBeli || 0,
+                            hargaJual: it.hargaJual || 0,
                         }))
                         : [];
 
@@ -75,7 +71,6 @@ export default function TransaksiJualForm({
                         nomorInvoice: initialTx.nomorInvoice || initialTx.id,
                         tanggal: initialTx.tanggal && dayjs(initialTx.tanggal).isValid() ? dayjs(initialTx.tanggal) : dayjs(),
                         idPelanggan: initialTx.idPelanggan,
-                        // Daerah dihapus
                         keterangan: initialTx.keterangan || '',
                         diskonLain: initialTx.diskonLain || 0,
                         biayaTentu: initialTx.biayaTentu || 0,
@@ -110,7 +105,7 @@ export default function TransaksiJualForm({
                 const year = now.format('YYYY');
                 const month = now.format('MM');
                 const keyPrefix = `INV-${year}-${month}-`;
-                const txRef = ref(db, 'transaksiJualPlate'); 
+                const txRef = ref(db, 'transaksiJualPlate');
                 const qy = query(txRef, orderByKey(), startAt(keyPrefix), endAt(keyPrefix + '\uf8ff'));
                 const snapshot = await get(qy);
                 let nextNum = 1;
@@ -128,7 +123,11 @@ export default function TransaksiJualForm({
                     }
                 }
                 const newNumStr = String(nextNum).padStart(4, '0');
-                const displayInvoice = `INV/${year}/${month}/${newNumStr}`;
+                
+                // --- PERBAIKAN DI SINI ---
+                // Gunakan strip (-) bukan slash (/) agar sesuai dengan validasi split('-')
+                const displayInvoice = `INV-${year}-${month}-${newNumStr}`; 
+                
                 if (isMounted) form.setFieldsValue({ nomorInvoice: displayInvoice });
             } catch (e) {
                 console.error("Error invoice:", e);
@@ -138,7 +137,7 @@ export default function TransaksiJualForm({
         };
         generateInvoiceNumber();
         return () => { isMounted = false; };
-    }, [mode, open, isGeneratingInvoice]);
+    }, [mode, open, isGeneratingInvoice, form]); // Added form dependency
 
 
     // ===== Helper Harga (Ambil Harga Beli dari Master) =====
@@ -152,12 +151,11 @@ export default function TransaksiJualForm({
     const handlePelangganChange = (idPelanggan) => {
         const pel = pelangganList.find((p) => p.id === idPelanggan) || null;
         setSelectedPelanggan(pel);
-        // Update harga beli jika pelanggan berubah (opsional, jika logic harga beli terpengaruh pelanggan kedepannya)
+        
         const items = form.getFieldValue('items') || [];
         const newItems = items.map((item) => {
             if (!item || !item.idPlate) return item;
-            // Harga Jual tidak direset, Harga Beli dipastikan dari master
-            const hargaBeli = getHargaMaster(item.idPlate); 
+            const hargaBeli = getHargaMaster(item.idPlate);
             return { ...item, hargaBeli };
         });
         form.setFieldsValue({ items: newItems });
@@ -166,16 +164,16 @@ export default function TransaksiJualForm({
     const handlePlateChange = (index, idPlate) => {
         const hargaBeli = getHargaMaster(idPlate);
         const items = form.getFieldValue('items') || [];
-        
+
         // Saat pilih plate baru:
         // Harga Beli = dari master
-        // Harga Jual = 0 (harus diisi manual admin) atau samakan dengan beli sebagai default
-        items[index] = { 
-            ...(items[index] || {}), 
-            idPlate, 
-            hargaBeli, 
-            hargaJual: 0, // Default 0 agar admin sadar harus mengisi
-            pekerjaan: '' 
+        // Harga Jual = 0 (harus diisi manual admin)
+        items[index] = {
+            ...(items[index] || {}),
+            idPlate,
+            hargaBeli,
+            hargaJual: 0, 
+            pekerjaan: ''
         };
         form.setFieldsValue({ items: [...items] });
     };
@@ -189,9 +187,11 @@ export default function TransaksiJualForm({
 
             const nominalDiskonLain = Number(diskonLain || 0);
             const nominalBiayaTentu = Number(biayaTentu || 0);
-            
+
             // Validasi Invoice
-            if (!data.nomorInvoice || !data.nomorInvoice.startsWith('INV/')) throw new Error('Nomor Invoice invalid.');
+            if (!data.nomorInvoice || !data.nomorInvoice.startsWith('INV-')) {
+                throw new Error('Nomor Invoice invalid (Format harus INV-YYYY-MM-XXXX).');
+            }
             const parts = data.nomorInvoice.split('-');
             const txKey = (mode === 'edit' && initialTx?.id) ? initialTx.id : `INV-${parts[1]}-${parts[2]}-${parts[3]}`;
 
@@ -209,7 +209,7 @@ export default function TransaksiJualForm({
 
             const processedItems = items.map((item, index) => {
                 if (!item.idPlate) throw new Error(`Item #${index + 1} belum dipilih.`);
-                
+
                 const plate = plateList.find((p) => p.id === item.idPlate);
                 if (!plate) throw new Error(`Plate data tidak ditemukan untuk item #${index + 1}`);
 
@@ -217,19 +217,19 @@ export default function TransaksiJualForm({
                 const hargaBeli = Number(item.hargaBeli); // Read only dari master
                 const hargaJual = Number(item.hargaJual); // Input Admin
 
-                if (isNaN(jumlah) || jumlah <= 0) throw new Error(`Qty item #${index+1} tidak valid.`);
-                if (isNaN(hargaJual)) throw new Error(`Harga Jual item #${index+1} tidak valid.`);
+                if (isNaN(jumlah) || jumlah <= 0) throw new Error(`Qty item #${index + 1} tidak valid.`);
+                if (isNaN(hargaJual)) throw new Error(`Harga Jual item #${index + 1} tidak valid.`);
 
                 // Kalkulasi Subtotal berdasarkan HARGA JUAL
                 const subtotal = hargaJual * jumlah;
-                
+
                 totalQty += jumlah;
                 totalTagihan += subtotal;
 
                 return {
                     idPlate: item.idPlate,
                     namaPlate: `${plate.ukuran_plate} (${plate.merek_plate})`,
-                    pekerjaan: item.pekerjaan || '-', // <-- Simpan Pekerjaan
+                    pekerjaan: item.pekerjaan || '-',
                     jumlah,
                     hargaBeli,  // Simpan untuk laporan laba rugi
                     hargaJual   // Harga yang dibayar customer
@@ -248,7 +248,6 @@ export default function TransaksiJualForm({
                 items: processedItems,
                 totalTagihan: finalTotalTagihan,
                 totalQty,
-                // Daerah dihapus
                 keterangan: data.keterangan || '',
                 diskonLain: nominalDiskonLain,
                 biayaTentu: nominalBiayaTentu,
@@ -297,7 +296,7 @@ export default function TransaksiJualForm({
         if (mode !== 'edit' || !initialTx?.id) return;
         setIsSaving(true);
         message.loading({ content: 'Menghapus transaksi...', key: 'del_tx' });
-        
+
         try {
             const updates = {};
             updates[`transaksiJualPlate/${initialTx.id}`] = null;
@@ -328,7 +327,7 @@ export default function TransaksiJualForm({
                 const subtotal = jumlah * hargaJual;
                 return (
                     <InputNumber
-                        value={subtotal} readOnly disabled 
+                        value={subtotal} readOnly disabled
                         formatter={rupiahFormatter} parser={rupiahParser}
                         style={{ width: '100%', textAlign: 'right', background: '#f5f5f5', color: '#000' }}
                     />
@@ -342,7 +341,7 @@ export default function TransaksiJualForm({
             title={mode === 'create' ? 'Tambah Penjualan Plate' : 'Edit Penjualan Plate'}
             open={open}
             onCancel={onCancel}
-            width={900} // Lebar ditambah sedikit agar kolom muat
+            width={900}
             confirmLoading={isSaving}
             destroyOnClose
             footer={null}
@@ -369,7 +368,7 @@ export default function TransaksiJualForm({
                         </Col>
                     </Row>
 
-                    {/* Pelanggan & Keterangan (Daerah dihapus) */}
+                    {/* Pelanggan & Keterangan */}
                     <Row gutter={16}>
                         <Col xs={24} md={12}>
                             <Form.Item name="idPelanggan" label="Pelanggan" rules={[{ required: true, message: 'Wajib dipilih!' }]}>
@@ -377,7 +376,7 @@ export default function TransaksiJualForm({
                                     showSearch
                                     placeholder="Pilih pelanggan"
                                     onChange={handlePelangganChange}
-                                    filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase()) }
+                                    filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())}
                                     disabled={(isGeneratingInvoice && mode === 'create')}
                                     loading={loadingDependencies}
                                 >
@@ -386,7 +385,7 @@ export default function TransaksiJualForm({
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                             <Form.Item name="keterangan" label="Keterangan / Catatan">
+                            <Form.Item name="keterangan" label="Keterangan / Catatan">
                                 <Input placeholder="Opsional" />
                             </Form.Item>
                         </Col>
@@ -415,10 +414,9 @@ export default function TransaksiJualForm({
                                                             optionLabelProp="label"
                                                         >
                                                             {sortedPlateList.map((p) => (
-                                                                <Option 
-                                                                    key={p.id} 
+                                                                <Option
+                                                                    key={p.id}
                                                                     value={p.id}
-                                                                    // Label Search & Tampilan Dropdown: Merek + Ukuran + Stok
                                                                     label={`${p.merek_plate} - ${p.ukuran_plate}`}
                                                                 >
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -442,14 +440,13 @@ export default function TransaksiJualForm({
                                                         <InputNumber min={1} style={{ width: '100%' }} />
                                                     </Form.Item>
                                                 </Col>
-                                                
+
                                                 <Col xs={12} md={6}>
                                                     <Form.Item {...restField} name={[name, 'hargaJual']} label="Harga Jual" rules={[{ required: true, message: 'Wajib' }]}>
-                                                        {/* Input Manual Admin */}
-                                                        <InputNumber 
+                                                        <InputNumber
                                                             placeholder="0"
-                                                            style={{ width: '100%', backgroundColor: '#fffbe6', borderColor: '#ffe58f' }} 
-                                                            formatter={rupiahFormatter} parser={rupiahParser} 
+                                                            style={{ width: '100%', backgroundColor: '#fffbe6', borderColor: '#ffe58f' }}
+                                                            formatter={rupiahFormatter} parser={rupiahParser}
                                                         />
                                                     </Form.Item>
                                                 </Col>
@@ -458,12 +455,12 @@ export default function TransaksiJualForm({
                                                         <SubtotalField index={index} />
                                                     </Form.Item>
                                                 </Col>
-                                                
+
                                                 {/* Tombol Hapus Item */}
                                                 {fields.length > 1 && (
-                                                    <Button 
-                                                        type="text" danger icon={<DeleteOutlined />} 
-                                                        onClick={() => remove(name)} 
+                                                    <Button
+                                                        type="text" danger icon={<DeleteOutlined />}
+                                                        onClick={() => remove(name)}
                                                         style={{ position: 'absolute', right: 0, top: 0 }}
                                                     />
                                                 )}

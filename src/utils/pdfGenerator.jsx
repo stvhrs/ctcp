@@ -14,7 +14,7 @@ const companyInfo = {
     nama: "CV. GANGSAR MULIA UTAMA",
 };
 
-const baseURL = 'https://gudanggalatama.web.app/'; 
+const baseURL = 'https://gudanggalatama.web.app-'; 
 
 // --- HELPER ---
 const formatNumber = (value) =>
@@ -77,7 +77,7 @@ const buildNotaDoc = (transaksi) => {
     doc.text('No. Nota:', infoRightColX, currentY);
     
     let displayNomor = transaksi.nomorInvoice || '-';
-    displayNomor = displayNomor.replace(/^INV-/i, 'NT-').replace('INV/', 'NT/');
+    displayNomor = displayNomor.replace(/^INV-/i, 'NT-').replace('INV-', 'NT-');
 
     doc.setFont('helvetica', 'normal');
     doc.text(displayNomor, infoRightColValueX, currentY);

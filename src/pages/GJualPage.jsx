@@ -134,7 +134,7 @@ function GJualPage() {
                  const lastTx = lastInvSnapshot.val();
                  const lastKey = Object.keys(lastTx)[0];
                  // Coba ambil nomor display dari data, fallback ke key jika tidak ada
-                 lastInvNum = lastTx[lastKey]?.nomorInvoice || lastKey.replace(/-/g, '/');
+                 lastInvNum = lastTx[lastKey]?.nomorInvoice || lastKey.replace(/-/g, '-');
                  console.log(`Nomor Invoice Terakhir Ditemukan: ${lastInvNum}`);
             } else {
                  console.log("Tidak ada transaksi sebelumnya, nomor invoice akan mulai dari 1.");
