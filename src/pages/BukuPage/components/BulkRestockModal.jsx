@@ -1,16 +1,87 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Modal, Form, Input, InputNumber, Button, message, Spin, Alert, Typography, Select, Space, Divider, Card, Row, Col, Statistic, DatePicker
+    Modal, Form, Input, InputNumber, Button, message, Spin, Alert, Typography,
+    Select, Space, Divider, Card, Row, Col, Statistic, DatePicker
 } from 'antd';
-import { ref, push, serverTimestamp, runTransaction, set } from 'firebase/database';
+import { 
+    ref, push, serverTimestamp, get, child, update 
+} from 'firebase/database';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+
+// Pastikan path import ini sesuai dengan struktur project Anda
 import { db } from '../../../api/firebase';
 import { numberFormatter } from '../../../utils/formatters';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs'; 
-import { updatePlateStock } from '../../../api/stokService'; // Import fungsi baru
+
 const { Text } = Typography;
 const { Option } = Select;
 
+// ==========================================
+// LOGIC SERVICE: Update Firebase (Atomic)
+// ==========================================
+const updatePlateStock = async (items, overallRemark, selectedDate) => {
+    try {
+        const updates = {};
+        const plateRef = ref(db, 'plate');
+
+        // 1. Ambil data stok saat ini (Snapshot) untuk semua item
+        const promises = items.map(item => get(child(plateRef, item.plateId)));
+        const snapshots = await Promise.all(promises);
+
+        // 2. Loop setiap item untuk menyusun object updates
+        snapshots.forEach((snap, index) => {
+            const item = items[index];
+            
+            if (!snap.exists()) {
+                throw new Error(`Data plate dengan ID ${item.plateId} tidak ditemukan.`);
+            }
+
+            const currentData = snap.val();
+            const currentStock = Number(currentData.stok || 0);
+            const changeAmount = Number(item.quantity);
+            const newStock = currentStock + changeAmount;
+
+            // --- A. Siapkan Update untuk Node 'plate' ---
+            updates[`/plate/${item.plateId}/stok`] = newStock;
+            updates[`/plate/${item.plateId}/updatedAt`] = serverTimestamp();
+
+            // --- B. Siapkan Data untuk Node 'historiStok' ---
+            const newHistoryKey = push(child(ref(db), 'historiStok')).key;
+            
+            // Gabungkan keterangan
+            let finalRemark = overallRemark;
+            if (item.specificRemark) {
+                finalRemark = overallRemark ? `${overallRemark} - ${item.specificRemark}` : item.specificRemark;
+            }
+
+            const historyData = {
+                plateId: item.plateId,
+                merek_plate: currentData.merek_plate || 'Unknown',
+                ukuran_plate: currentData.ukuran_plate || 'Unknown',
+                stokSebelum: currentStock,
+                stokSesudah: newStock,
+                perubahan: changeAmount,
+                tanggal: selectedDate,     
+                timestamp: serverTimestamp(),
+                keterangan: finalRemark || '-'
+            };
+
+            updates[`/historiStok/${newHistoryKey}`] = historyData;
+        });
+
+        // 3. Eksekusi semua perubahan sekaligus
+        await update(ref(db), updates);
+
+        return true;
+    } catch (error) {
+        console.error("Error updating stock:", error);
+        throw error;
+    }
+};
+
+// ==========================================
+// UI SUB-COMPONENT: Subtotal Display
+// ==========================================
 const SubtotalDisplay = ({ index }) => (
     <Form.Item
         noStyle
@@ -38,6 +109,9 @@ const SubtotalDisplay = ({ index }) => (
     </Form.Item>
 );
 
+// ==========================================
+// MAIN COMPONENT: BulkRestockModal
+// ==========================================
 const BulkRestockModal = ({ open, onClose, plateList }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
@@ -59,36 +133,42 @@ const BulkRestockModal = ({ open, onClose, plateList }) => {
         setSelectedPlateIdsInForm(currentIds);
     }, []);
 
-const handleOk = async () => {
-    try {
-        const values = await form.validateFields();
-        const overallRemark = values.overallRemark || '';
-        const selectedDate = values.tanggal ? values.tanggal.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
+    const handleOk = async () => {
+        try {
+            const values = await form.validateFields();
+            const overallRemark = values.overallRemark || '';
+            const selectedDate = values.tanggal ? values.tanggal.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
 
-        const items = values.items || [];
-        // Filter item valid
-        const validItems = items.filter(
-            item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
-        );
+            const items = values.items || [];
+            
+            // Filter item yang valid saja
+            const validItems = items.filter(
+                item => item && item.plateId && item.quantity !== null && item.quantity !== undefined
+            );
 
-        if (validItems.length === 0) { /* ... error handling ... */ return; }
-        if (validItems.some(item => Number(item.quantity) === 0)) { /* ... error handling ... */ return; }
+            if (validItems.length === 0) {
+                message.warning("Mohon isi setidaknya satu item plate.");
+                return;
+            }
+            if (validItems.some(item => Number(item.quantity) === 0)) {
+                message.warning("Qty tidak boleh 0.");
+                return;
+            }
 
-        setLoading(true);
+            setLoading(true);
 
-        // PANGGIL FUNGSI STANDARD BULK
-        // Note: Kita tidak perlu loop manual di sini karena sudah dihandle service
-        await updatePlateStock(validItems, overallRemark, selectedDate);
+            // Panggil fungsi logic di atas
+            await updatePlateStock(validItems, overallRemark, selectedDate);
 
-        message.success(`Stok berhasil diperbarui.`);
-        onClose();
-    } catch (error) {
-        console.error('Error Restock:', error);
-        message.error('Gagal menyimpan data.');
-    } finally {
-        setLoading(false);
-    }
-};
+            message.success(`Stok berhasil diperbarui.`);
+            onClose();
+        } catch (error) {
+            console.error('Error Restock:', error);
+            message.error('Gagal menyimpan data: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <Modal
