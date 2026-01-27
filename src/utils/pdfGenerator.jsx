@@ -1,9 +1,5 @@
 // ================================
 // FILE: src/utils/pdfGenerator.js
-// MODIFIKASI:
-// 1. Header Tabel: Background Putih.
-// 2. Summary: Jarak vertikal diperkecil (Line Height: 4.5).
-// 3. Font Size: Tetap 8pt.
 // ================================
 
 import jsPDF from 'jspdf';
@@ -14,7 +10,7 @@ const companyInfo = {
     nama: "CV. GANGSAR MULIA UTAMA",
 };
 
-const baseURL = 'https://gudanggalatama.web.app-'; 
+const baseURL = 'https://gudanggalatama.web.app'; 
 
 // --- HELPER ---
 const formatNumber = (value) =>
@@ -36,61 +32,67 @@ const buildNotaDoc = (transaksi) => {
     
     // --- 1. PENGATURAN KERTAS (A5 Landscape) ---
     const doc = new jsPDF('landscape', 'mm', 'a5'); 
-    const margin = { top: 15, right: 15, bottom: 20, left: 15 };
+    const margin = { top: 15, right: 15, bottom: 15, left: 15 };
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Titik referensi paling kanan (agar layout rapi rata kanan)
+    const rightEdge = pageWidth - margin.right;
+    
     let currentY = margin.top;
 
     const title = 'NOTA PEMBAYARAN';
-    const linkId = (transaksi.nomorInvoice || transaksi.id || '').replace(/^INV-/i, 'NT-'); 
-    const link = `${baseURL}/nota/${linkId}`;
 
     // --- 2. HEADER ---
     doc.setFontSize(16); 
     doc.setFont('helvetica', 'bold');
+    // Kiri: Nama Perusahaan
     doc.text(companyInfo.nama, margin.left, currentY);
     
+    // Kanan: Judul Nota
     doc.setFontSize(10); 
-    doc.text(title, pageWidth - margin.right, currentY, { align: 'right' });
+    doc.text(title, rightEdge, currentY, { align: 'right' });
     
     currentY += 2; 
 
+    // Garis Header
     doc.setLineWidth(0.3);
     doc.setDrawColor(0, 0, 0);
-    doc.line(margin.left, currentY, pageWidth - margin.right, currentY);
+    doc.line(margin.left, currentY, rightEdge, currentY);
     currentY += 6; 
 
     // --- 3. INFO PELANGGAN & TRANSAKSI ---
-    const infoRightColX = pageWidth / 2 + 10;
-    const infoRightColValueX = infoRightColX + 25;
+    // Variabel posisi untuk kolom kanan (No Nota & Tanggal)
+    // Kita gunakan rightEdge sebagai patokan agar mentok kanan
     
-    // Kiri: Info Pelanggan
+    // -- KIRI: Info Pelanggan --
     doc.setFontSize(9); 
     doc.setFont('helvetica', 'bold');
     doc.text('Kepada Yth:', margin.left, currentY);
     doc.setFont('helvetica', 'normal');
     doc.text(transaksi.namaPelanggan || 'Pelanggan Umum', margin.left, currentY + 5);
     
-    // Kanan: Info Nota
-    doc.setFont('helvetica', 'bold');
-    doc.text('No. Nota:', infoRightColX, currentY);
-    
+    // -- KANAN: Info Nota (Space Between) --
     let displayNomor = transaksi.nomorInvoice || '-';
     displayNomor = displayNomor.replace(/^INV-/i, 'NT-').replace('INV-', 'NT-');
 
-    doc.setFont('helvetica', 'normal');
-    doc.text(displayNomor, infoRightColValueX, currentY);
-    
+    // Baris 1: No. Nota
     doc.setFont('helvetica', 'bold');
-    doc.text('Tanggal:', infoRightColX, currentY + 5);
+    doc.text('No. Nota:', rightEdge - 40, currentY, { align: 'left' }); // Label
     doc.setFont('helvetica', 'normal');
-    doc.text(formatDate(transaksi.tanggal), infoRightColValueX, currentY + 5);
+    doc.text(displayNomor, rightEdge, currentY, { align: 'right' });   // Value
+
+    // Baris 2: Tanggal
+    doc.setFont('helvetica', 'bold');
+    doc.text('Tanggal:', rightEdge - 40, currentY + 5, { align: 'left' });
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDate(transaksi.tanggal), rightEdge, currentY + 5, { align: 'right' });
     
     currentY += 12; 
 
     // --- 4. TABEL ITEM ---
-    const head = [['No', 'Pekerjaan', 'Merek', 'Ukuran', 'Qty', 'Harga', 'Subtotal']];
+    const head = [['No', 'Pekerjaan', 'Ukuran', 'Qty', 'Harga', 'Subtotal']];
     
     let totalQty = 0;
     let subtotalItems = 0; 
@@ -105,6 +107,8 @@ const buildNotaDoc = (transaksi) => {
 
         let merek = '-';
         let ukuran = item.namaPlate || '-';
+        
+        // Logika parsing ukuran jika ada format "Ukuran (Merek)"
         const matchMerek = item.namaPlate?.match(/\(([^)]+)\)/);
         if (matchMerek) {
             merek = matchMerek[1];
@@ -114,7 +118,6 @@ const buildNotaDoc = (transaksi) => {
         return [
             i + 1, 
             item.pekerjaan || '-',     
-            merek,                     
             ukuran,                    
             qty, 
             formatNumber(hargaSatuan), 
@@ -126,10 +129,10 @@ const buildNotaDoc = (transaksi) => {
         head,
         body,
         startY: currentY,
-        theme: 'grid',
+        theme: 'grid', // Menggunakan garis
         headStyles: {
-            fillColor: [255, 255, 255], // Putih
-            textColor: [0, 0, 0],
+            fillColor: [255, 255, 255], // Background Header Putih
+            textColor: [0, 0, 0],       // Teks Hitam
             lineColor: [0, 0, 0],
             lineWidth: 0.1,
             halign: 'center',
@@ -146,13 +149,12 @@ const buildNotaDoc = (transaksi) => {
             textColor: [0, 0, 0]
         },
         columnStyles: {
-            0: { halign: 'center', cellWidth: 8 },  
-            1: { cellWidth: 40 },                   
-            2: { cellWidth: 25 },                   
-            3: { cellWidth: 25 },                   
-            4: { halign: 'center', cellWidth: 10 }, 
-            5: { halign: 'right', cellWidth: 30 },  
-            6: { halign: 'right', cellWidth: 'auto' } 
+            0: { halign: 'center', cellWidth: 10 }, // No
+            1: { halign: 'left', cellWidth: 'auto' }, // Pekerjaan (Fleksibel)
+            2: { halign: 'center', cellWidth: 25 }, // Ukuran
+            3: { halign: 'center', cellWidth: 15 }, // Qty
+            4: { halign: 'right', cellWidth: 25 },  // Harga
+            5: { halign: 'right', cellWidth: 30 }   // Subtotal
         },
         margin: { left: margin.left, right: margin.right },
     });
@@ -160,6 +162,7 @@ const buildNotaDoc = (transaksi) => {
     currentY = doc.lastAutoTable.finalY || currentY;
     currentY += 5; 
     
+    // Fungsi cek halaman baru sederhana
     const checkPageOverflow = (y, increment = 5) => { 
         if (y + increment > pageHeight - margin.bottom) {
              doc.addPage();
@@ -177,8 +180,9 @@ const buildNotaDoc = (transaksi) => {
     const jumlahTerbayar = Number(transaksi.jumlahTerbayar || 0);
     const sisaTagihan = totalTagihanFinal - jumlahTerbayar;
 
-    const totalColValueX = pageWidth - margin.right; 
-    const totalColLabelX = totalColValueX - 40; 
+    // Posisi Label Total (digeser 40mm dari kanan)
+    const totalColValueX = rightEdge; 
+    const totalColLabelX = rightEdge - 40; 
     
     let summaryY = currentY;
 
@@ -191,53 +195,80 @@ const buildNotaDoc = (transaksi) => {
 
     // --- KANAN: Rincian Angka ---
     doc.setFontSize(8); 
-    const lineHeight = 4.5; // <--- MODIFIKASI: Diperkecil menjadi 4.5 (sebelumnya 6)
+    const lineHeight = 4.5; // Jarak vertikal diperkecil
     
     // 1. Total Barang
     doc.setFont('helvetica', 'normal'); 
-    doc.text('Total Barang:', totalColLabelX, summaryY); 
+    doc.text('Total Barang:', totalColLabelX, summaryY, { align: 'left' }); 
     doc.text(formatNumber(subtotalItems), totalColValueX, summaryY, { align: 'right' }); 
     summaryY = checkPageOverflow(summaryY, lineHeight);
 
     // 2. Potongan Lain
     if (diskonLain > 0) {
-        doc.text('Potongan Lain:', totalColLabelX, summaryY); 
+        doc.text('Potongan Lain:', totalColLabelX, summaryY, { align: 'left' }); 
         doc.text(`(${formatNumber(diskonLain)})`, totalColValueX, summaryY, { align: 'right' }); 
         summaryY = checkPageOverflow(summaryY, lineHeight);
     }
     
     // 3. Biaya Tambahan
     if (biayaTentu > 0) {
-        doc.text('Biaya Tambahan:', totalColLabelX, summaryY);
+        doc.text('Biaya Tambahan:', totalColLabelX, summaryY, { align: 'left' });
         doc.text(formatNumber(biayaTentu), totalColValueX, summaryY, { align: 'right' }); 
         summaryY = checkPageOverflow(summaryY, lineHeight);
     }
 
-    // Garis pemisah total
-    // doc.setLineWidth(0.1);
-    // doc.line(totalColLabelX - 2, summaryY - (lineHeight/2), pageWidth - margin.right, summaryY - (lineHeight/2));
-
     // 4. Total Tagihan
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Tagihan:', totalColLabelX, summaryY);
+    doc.text('Total Tagihan:', totalColLabelX, summaryY, { align: 'left' });
     doc.text(formatNumber(totalTagihanFinal), totalColValueX, summaryY, { align: 'right' }); 
     summaryY = checkPageOverflow(summaryY, lineHeight);
 
     // 5. Terbayar
     doc.setFont('helvetica', 'normal');
-    doc.text('Terbayar:', totalColLabelX, summaryY);
+    doc.text('Terbayar:', totalColLabelX, summaryY, { align: 'left' });
     doc.text(formatNumber(jumlahTerbayar), totalColValueX, summaryY, { align: 'right' }); 
     summaryY = checkPageOverflow(summaryY, lineHeight);
     
     // 6. Sisa
     doc.setFont('helvetica', 'bold');
-    doc.text('Sisa Tagihan:', totalColLabelX, summaryY);
+    doc.text('Sisa Tagihan:', totalColLabelX, summaryY, { align: 'left' });
     doc.text(formatNumber(sisaTagihan), totalColValueX, summaryY, { align: 'right' }); 
+    
+    currentY = summaryY + 8; // Beri jarak setelah total sebelum Tanda Tangan
+
+    // --- 6. TANDA TANGAN ---
+    // Cek apakah cukup ruang untuk tanda tangan (butuh sekitar 30mm)
+    if (currentY + 30 > pageHeight - margin.bottom) {
+        doc.addPage();
+        currentY = margin.top + 10;
+    }
+
+    const signY = currentY + 5;
+    const nameY = signY + 18; // Jarak untuk tanda tangan
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+
+    // -- Kiri: Pelanggan --
+    // Posisi X sekitar margin kiri + sedikit offset agar center
+    const leftSignX = margin.left + 20; 
+    
+    doc.text("Penerima,", leftSignX, signY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`( ${transaksi.namaPelanggan || '...................'} )`, leftSignX, nameY, { align: 'center' });
+
+    // -- Kanan: Admin --
+    // Posisi X sekitar rightEdge - sedikit offset agar center
+    const rightSignX = rightEdge - 20; 
+
+    doc.setFont('helvetica', 'normal');
+    doc.text("Hormat Kami,", rightSignX, signY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text("( Admin )", rightSignX, nameY, { align: 'center' });
 
     return doc;
 };
 
 export const generateNotaPDF = (transaksi) =>
     buildNotaDoc(transaksi).output('datauristring');
-
 export const generateInvoicePDF = () => {};

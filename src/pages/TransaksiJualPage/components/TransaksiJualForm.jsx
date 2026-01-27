@@ -1,6 +1,5 @@
 // ================================
 // FILE: src/pages/transaksi-jual/components/TransaksiJualForm.jsx
-// - FIX: Auto Generate Invoice ID mengikuti Tanggal yang dipilih (Realtime)
 // ================================
 
 import React, { useEffect, useState } from 'react';
@@ -51,9 +50,9 @@ export default function TransaksiJualForm({
 
     const [isSaving, setIsSaving] = useState(false);
     const [selectedPelanggan, setSelectedPelanggan] = useState(null);
-    const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(mode === 'create');
+    const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
-    // ===== Prefill saat EDIT =====
+    // ===== Prefill saat EDIT / Reset saat CREATE =====
     useEffect(() => {
         if (open) {
             if (mode === 'edit' && initialTx) {
@@ -73,7 +72,7 @@ export default function TransaksiJualForm({
 
                     form.setFieldsValue({
                         nomorInvoice: initialTx.nomorInvoice || initialTx.id,
-                        tanggal: initialTx.tanggal && dayjs(initialTx.tanggal).isValid() ? dayjs(initialTx.tanggal) : dayjs(),
+                        tanggal: initialTx.tanggal && dayjs(initialTx.tanggal).isValid() ? dayjs(initialTx.tanggal) : null,
                         idPelanggan: initialTx.idPelanggan,
                         keterangan: initialTx.keterangan || '',
                         diskonLain: initialTx.diskonLain || 0,
@@ -87,36 +86,56 @@ export default function TransaksiJualForm({
                 }
             } else if (mode === 'create') {
                 form.resetFields();
+                // REQ: Default tanggal empty (null)
                 form.setFieldsValue({
-                    tanggal: dayjs(), // Default hari ini
+                    tanggal: null, 
                     items: [{}],
                     diskonLain: 0,
                     biayaTentu: 0
                 });
                 setSelectedPelanggan(null);
-                setIsGeneratingInvoice(true);
+                // Jangan generate invoice dulu karena tanggal masih kosong
+                setIsGeneratingInvoice(false); 
             }
         }
     }, [mode, initialTx, pelangganList, form, onCancel, open]);
 
 
-    // ===== Generate nomor invoice (MODIFIED: Mengikuti selectedTanggal) =====
+    // ===== Generate Invoice ID (CREATE & EDIT) =====
     useEffect(() => {
-        // Hanya jalankan jika mode create, modal terbuka, dan tanggal sudah terisi/dipilih
-        if (mode !== 'create' || !open || !selectedTanggal) return;
+        // Jangan jalankan jika modal tertutup atau tanggal kosong
+        if (!open || !selectedTanggal) return;
 
         let isMounted = true;
         
-        // Gunakan timeout untuk debounce (cegah spam request jika user ganti tanggal cepat)
+        // Gunakan timeout untuk debounce
         const timeoutId = setTimeout(async () => {
             try {
-                // Ambil Tahun & Bulan dari tanggal yang DIPILIH USER
                 const year = selectedTanggal.format('YYYY');
                 const month = selectedTanggal.format('MM');
-                const keyPrefix = `INV-${year}-${month}-`;
+                
+                // LOGIKA EDIT: 
+                // Cek apakah tanggal yang dipilih (Bulan/Tahun) sama dengan tanggal asli transaksi
+                if (mode === 'edit' && initialTx) {
+                    const initDate = dayjs(initialTx.tanggal);
+                    const initYear = initDate.format('YYYY');
+                    const initMonth = initDate.format('MM');
 
+                    // Jika Bulan & Tahun SAMA dengan data lama, kembalikan ke Invoice Lama
+                    if (year === initYear && month === initMonth) {
+                        if (isMounted) {
+                            form.setFieldsValue({ nomorInvoice: initialTx.nomorInvoice });
+                        }
+                        return; // Stop, tidak perlu generate baru
+                    }
+                }
+
+                // Jika CREATE atau EDIT (tapi beda bulan/tahun), Generate Invoice Baru
+                setIsGeneratingInvoice(true);
+
+                const keyPrefix = `INV-${year}-${month}-`;
                 const txRef = ref(db, 'transaksiJualPlate');
-                // Query cari invoice dengan prefix tahun-bulan yang sama
+                
                 const qy = query(txRef, orderByKey(), startAt(keyPrefix), endAt(keyPrefix + '\uf8ff'));
                 
                 const snapshot = await get(qy);
@@ -124,7 +143,7 @@ export default function TransaksiJualForm({
 
                 if (snapshot.exists()) {
                     const keys = Object.keys(snapshot.val());
-                    // Sort untuk cari nomor urut terakhir
+                    // Sort cari nomor terakhir
                     keys.sort((a, b) => {
                         const numA = parseInt(a.split('-').pop() || '0', 10);
                         const numB = parseInt(b.split('-').pop() || '0', 10);
@@ -143,7 +162,6 @@ export default function TransaksiJualForm({
                 const displayInvoice = `INV-${year}-${month}-${newNumStr}`; 
                 
                 if (isMounted) {
-                    // Update field nomor invoice di form
                     form.setFieldsValue({ nomorInvoice: displayInvoice });
                 }
             } catch (e) {
@@ -151,20 +169,20 @@ export default function TransaksiJualForm({
             } finally {
                 if (isMounted) setIsGeneratingInvoice(false);
             }
-        }, 500); // Delay 500ms
+        }, 500);
 
         return () => { 
             isMounted = false; 
             clearTimeout(timeoutId);
         };
-    }, [mode, open, selectedTanggal, form]); // Dependency ke selectedTanggal agar trigger ulang saat tanggal berubah
+    }, [mode, open, selectedTanggal, initialTx, form]); 
 
 
-    // ===== Helper Harga (Ambil Harga Beli dari Master) =====
+    // ===== Helper Harga =====
     const getHargaMaster = (idPlate) => {
         const plate = plateList.find((p) => p.id === idPlate);
         if (!plate) return 0;
-        return Number(plate.harga_plate) || 0; // Ini dianggap sebagai Harga Beli
+        return Number(plate.harga_plate) || 0;
     };
 
     // ===== Handlers =====
@@ -184,10 +202,6 @@ export default function TransaksiJualForm({
     const handlePlateChange = (index, idPlate) => {
         const hargaBeli = getHargaMaster(idPlate);
         const items = form.getFieldValue('items') || [];
-
-        // Saat pilih plate baru:
-        // Harga Beli = dari master
-        // Harga Jual = 0 (harus diisi manual admin)
         items[index] = {
             ...(items[index] || {}),
             idPlate,
@@ -208,59 +222,53 @@ export default function TransaksiJualForm({
             const nominalDiskonLain = Number(diskonLain || 0);
             const nominalBiayaTentu = Number(biayaTentu || 0);
 
-            // Validasi Invoice
             if (!data.nomorInvoice || !data.nomorInvoice.startsWith('INV-')) {
-                throw new Error('Nomor Invoice invalid (Format harus INV-YYYY-MM-XXXX).');
+                throw new Error('Nomor Invoice invalid.');
             }
-            const parts = data.nomorInvoice.split('-');
-            // Gunakan ID lama jika Edit, atau ID baru dari form jika Create
-            const txKey = (mode === 'edit' && initialTx?.id) ? initialTx.id : `INV-${parts[1]}-${parts[2]}-${parts[3]}`;
-
-            // Validasi Pelanggan
-            const pelanggan = pelangganList.find((p) => p.id === idPelanggan);
-            if (!pelanggan) throw new Error('Pelanggan tidak valid.');
-
-            // Validasi Item
+            
+            // Validasi Items
             if (!items || items.length === 0 || items.some(item => !item || !item.idPlate)) {
                 throw new Error('Minimal 1 item plate valid diperlukan.');
             }
+
+            const pelanggan = pelangganList.find((p) => p.id === idPelanggan);
+            if (!pelanggan) throw new Error('Pelanggan tidak valid.');
 
             let totalTagihan = 0;
             let totalQty = 0;
 
             const processedItems = items.map((item, index) => {
                 if (!item.idPlate) throw new Error(`Item #${index + 1} belum dipilih.`);
-
                 const plate = plateList.find((p) => p.id === item.idPlate);
-                if (!plate) throw new Error(`Plate data tidak ditemukan untuk item #${index + 1}`);
+                if (!plate) throw new Error(`Data plate tidak ditemukan.`);
 
                 const jumlah = Number(item.jumlah);
-                const hargaBeli = Number(item.hargaBeli); // Read only dari master
-                const hargaJual = Number(item.hargaJual); // Input Admin
+                const hargaBeli = Number(item.hargaBeli);
+                const hargaJual = Number(item.hargaJual);
 
                 if (isNaN(jumlah) || jumlah <= 0) throw new Error(`Qty item #${index + 1} tidak valid.`);
                 if (isNaN(hargaJual)) throw new Error(`Harga Jual item #${index + 1} tidak valid.`);
 
-                // Kalkulasi Subtotal berdasarkan HARGA JUAL
-                const subtotal = hargaJual * jumlah;
-
                 totalQty += jumlah;
-                totalTagihan += subtotal;
+                totalTagihan += (hargaJual * jumlah);
 
                 return {
                     idPlate: item.idPlate,
                     namaPlate: `${plate.ukuran_plate} (${plate.merek_plate})`,
                     pekerjaan: item.pekerjaan || '-',
                     jumlah,
-                    hargaBeli,  // Simpan untuk laporan laba rugi
-                    hargaJual   // Harga yang dibayar customer
+                    hargaBeli,
+                    hargaJual
                 };
             });
 
             const finalTotalTagihan = totalTagihan - nominalDiskonLain + nominalBiayaTentu;
 
+            // Object Data Baru
             const baseTx = {
                 nomorInvoice: data.nomorInvoice,
+                // Pastikan key ini sama dengan key object (untuk konsistensi pencarian)
+                id: data.nomorInvoice, 
                 tanggal: data.tanggal.valueOf(),
                 idPelanggan,
                 namaPelanggan: pelanggan.nama,
@@ -278,7 +286,8 @@ export default function TransaksiJualForm({
             const txPath = 'transaksiJualPlate';
 
             if (mode === 'create') {
-                updates[`${txPath}/${txKey}`] = {
+                // CREATE BIASA
+                updates[`${txPath}/${data.nomorInvoice}`] = {
                     ...baseTx,
                     jumlahTerbayar: 0,
                     statusPembayaran: 'Belum Bayar',
@@ -288,17 +297,33 @@ export default function TransaksiJualForm({
                 };
             } else {
                 // EDIT MODE
-                if (!initialTx?.id) throw new Error("ID transaksi edit hilang.");
-                updates[`${txPath}/${initialTx.id}`] = {
-                    ...initialTx,
-                    ...baseTx,
-                    updatedAt: serverTimestamp()
-                };
+                if (!initialTx?.id) throw new Error("ID transaksi lama hilang.");
+                
+                const oldId = initialTx.id;
+                const newId = data.nomorInvoice;
+
+                // Cek apakah ID berubah (karena tanggal berubah)
+                if (oldId !== newId) {
+                    // LOGIKA: Hapus yang lama, Buat yang baru (Move)
+                    updates[`${txPath}/${oldId}`] = null; // Delete Old
+                    updates[`${txPath}/${newId}`] = {     // Insert New
+                        ...initialTx, // copy data lama (seperti created at, history bayar)
+                        ...baseTx,    // timpa dengan data form baru
+                        updatedAt: serverTimestamp()
+                    };
+                } else {
+                    // LOGIKA: Update biasa (ID sama)
+                    updates[`${txPath}/${oldId}`] = {
+                        ...initialTx,
+                        ...baseTx,
+                        updatedAt: serverTimestamp()
+                    };
+                }
             }
 
             await update(ref(db), updates);
 
-            message.success({ content: 'Transaksi berhasil disimpan (Stok tidak berubah)', key: 'tx' });
+            message.success({ content: 'Transaksi berhasil disimpan', key: 'tx' });
             form.resetFields();
             setSelectedPelanggan(null);
             onSuccess?.();
@@ -310,7 +335,7 @@ export default function TransaksiJualForm({
         }
     };
 
-    // ===== Delete (Hapus Record Saja) =====
+    // ===== Delete =====
     const handleDelete = async () => {
         if (mode !== 'edit' || !initialTx?.id) return;
         setIsSaving(true);
@@ -330,7 +355,7 @@ export default function TransaksiJualForm({
         }
     };
 
-    // ===== Subtotal Component (Based on Harga Jual) =====
+    // ===== Subtotal Component =====
     const SubtotalField = ({ index }) => (
         <Form.Item
             noStyle
@@ -342,10 +367,9 @@ export default function TransaksiJualForm({
             {({ getFieldValue }) => {
                 const jumlah = Number(getFieldValue(['items', index, 'jumlah']) || 0);
                 const hargaJual = Number(getFieldValue(['items', index, 'hargaJual']) || 0);
-                const subtotal = jumlah * hargaJual;
                 return (
                     <InputNumber
-                        value={subtotal} readOnly disabled
+                        value={jumlah * hargaJual} readOnly disabled
                         formatter={rupiahFormatter} parser={rupiahParser}
                         style={{ width: '100%', textAlign: 'right', background: '#f5f5f5', color: '#000' }}
                     />
@@ -366,23 +390,23 @@ export default function TransaksiJualForm({
             footer={null}
             maskClosable={false}
         >
-            <Spin spinning={loadingDependencies} tip="Memuat data...">
+            <Spin spinning={loadingDependencies || isGeneratingInvoice} tip={isGeneratingInvoice ? "Generate Invoice..." : "Memuat data..."}>
                 <Form
                     form={form}
                     layout="vertical"
                     onFinish={handleFinish}
-                    initialValues={{ tanggal: dayjs(), items: [{}], diskonLain: 0, biayaTentu: 0 }}
+                    initialValues={{ tanggal: null, items: [{}], diskonLain: 0, biayaTentu: 0 }}
                 >
-                    {/* Header: Invoice & Tanggal */}
+                    {/* Header */}
                     <Row gutter={16}>
                         <Col xs={24} md={12}>
                             <Form.Item name="nomorInvoice" label="Nomor Invoice" rules={[{ required: true }]}>
-                                <Input disabled readOnly placeholder="Auto Generated..." />
+                                <Input disabled readOnly placeholder="Pilih tanggal dulu..." />
                             </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                            <Form.Item name="tanggal" label="Tanggal" rules={[{ required: true }]}>
-                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" allowClear={false} />
+                            <Form.Item name="tanggal" label="Tanggal" rules={[{ required: true, message: 'Tanggal Wajib Diisi' }]}>
+                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Pilih Tanggal" />
                             </Form.Item>
                         </Col>
                     </Row>
@@ -396,7 +420,6 @@ export default function TransaksiJualForm({
                                     placeholder="Pilih pelanggan"
                                     onChange={handlePelangganChange}
                                     filterOption={(input, option) => (option?.children?.toString() ?? '').toLowerCase().includes(input.toLowerCase())}
-                                    disabled={(isGeneratingInvoice && mode === 'create')}
                                     loading={loadingDependencies}
                                 >
                                     {pelangganList.map((p) => (<Option key={p.id} value={p.id}>{p.nama}</Option>))}
@@ -421,7 +444,6 @@ export default function TransaksiJualForm({
                                     return (
                                         <Card key={key} size="small" style={{ backgroundColor: '#fafafa', border: '1px solid #d9d9d9' }}>
                                             <Row gutter={12}>
-                                                {/* Baris 1: Pilih Plate & Pekerjaan */}
                                                 <Col xs={24} md={12}>
                                                     <Form.Item {...restField} name={[name, 'idPlate']} rules={[{ required: true, message: 'Pilih plate' }]} label="Pilih Plate">
                                                         <Select
@@ -433,11 +455,7 @@ export default function TransaksiJualForm({
                                                             optionLabelProp="label"
                                                         >
                                                             {sortedPlateList.map((p) => (
-                                                                <Option
-                                                                    key={p.id}
-                                                                    value={p.id}
-                                                                    label={`${p.merek_plate} - ${p.ukuran_plate}`}
-                                                                >
+                                                                <Option key={p.id} value={p.id} label={`${p.merek_plate} - ${p.ukuran_plate}`}>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                                         <span><b>{p.merek_plate}</b> - {p.ukuran_plate}</span>
                                                                         <span style={{ color: p.stok > 0 ? 'green' : 'red' }}>Stok: {p.stok}</span>
@@ -452,49 +470,32 @@ export default function TransaksiJualForm({
                                                         <Input placeholder="Nama pekerjaan/Order..." />
                                                     </Form.Item>
                                                 </Col>
-
-                                                {/* Baris 2: Qty, Harga Beli, Harga Jual, Subtotal */}
                                                 <Col xs={12} md={4}>
                                                     <Form.Item {...restField} name={[name, 'jumlah']} label="Qty" initialValue={1} rules={[{ required: true }]}>
                                                         <InputNumber min={1} style={{ width: '100%' }} />
                                                     </Form.Item>
                                                 </Col>
-
                                                 <Col xs={12} md={6}>
                                                     <Form.Item {...restField} name={[name, 'hargaJual']} label="Harga Jual" rules={[{ required: true, message: 'Wajib' }]}>
-                                                        <InputNumber
-                                                            placeholder="0"
-                                                            style={{ width: '100%', backgroundColor: '#fffbe6', borderColor: '#ffe58f' }}
-                                                            formatter={rupiahFormatter} parser={rupiahParser}
-                                                        />
+                                                        <InputNumber placeholder="0" style={{ width: '100%', backgroundColor: '#fffbe6', borderColor: '#ffe58f' }} formatter={rupiahFormatter} parser={rupiahParser} />
                                                     </Form.Item>
                                                 </Col>
                                                 <Col xs={12} md={6}>
-                                                    <Form.Item label="Subtotal">
-                                                        <SubtotalField index={index} />
-                                                    </Form.Item>
+                                                    <Form.Item label="Subtotal"><SubtotalField index={index} /></Form.Item>
                                                 </Col>
-
-                                                {/* Tombol Hapus Item */}
                                                 {fields.length > 1 && (
-                                                    <Button
-                                                        type="text" danger icon={<DeleteOutlined />}
-                                                        onClick={() => remove(name)}
-                                                        style={{ position: 'absolute', right: 0, top: 0 }}
-                                                    />
+                                                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} style={{ position: 'absolute', right: 0, top: 0 }} />
                                                 )}
                                             </Row>
                                         </Card>
                                     );
                                 })}
-                                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan}>
-                                    Tambah Item Plate
-                                </Button>
+                                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />} disabled={!selectedPelanggan}>Tambah Item Plate</Button>
                             </div>
                         )}
                     </Form.List>
 
-                    {/* Diskon Lain & Biaya Tentu */}
+                    {/* Diskon & Biaya */}
                     <Row gutter={16} style={{ marginTop: 24 }}>
                         <Col xs={24} md={12}>
                             <Form.Item name="diskonLain" label="Potongan Lain (Nominal)">
@@ -508,15 +509,13 @@ export default function TransaksiJualForm({
                         </Col>
                     </Row>
 
-                    {/* Grand Total Watcher */}
+                    {/* Totals */}
                     <Form.Item noStyle shouldUpdate>
                         {({ getFieldValue }) => {
                             const items = getFieldValue('items') || [];
                             const diskonLain = Number(getFieldValue('diskonLain') || 0);
                             const biayaTentu = Number(getFieldValue('biayaTentu') || 0);
-
-                            let subtotalAll = 0;
-                            let totalQty = 0;
+                            let subtotalAll = 0, totalQty = 0;
 
                             items.forEach(it => {
                                 const qty = Number(it?.jumlah || 0);
@@ -524,17 +523,12 @@ export default function TransaksiJualForm({
                                 subtotalAll += (qty * hJual);
                                 totalQty += qty;
                             });
-
                             const grandTotal = subtotalAll - diskonLain + biayaTentu;
 
                             return (
                                 <Row gutter={16} style={{ marginTop: 16 }}>
-                                    <Col span={8}>
-                                        <Card size="small"><Statistic title="Total Item" value={totalQty} /></Card>
-                                    </Col>
-                                    <Col span={8}>
-                                        <Card size="small"><Statistic title="Subtotal" value={subtotalAll} formatter={rupiahFormatter} /></Card>
-                                    </Col>
+                                    <Col span={8}><Card size="small"><Statistic title="Total Item" value={totalQty} /></Card></Col>
+                                    <Col span={8}><Card size="small"><Statistic title="Subtotal" value={subtotalAll} formatter={rupiahFormatter} /></Card></Col>
                                     <Col span={8}>
                                         <Card size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
                                             <Statistic title="Grand Total" value={grandTotal} formatter={rupiahFormatter} valueStyle={{ color: '#389e0d', fontWeight: 'bold' }} />
@@ -556,7 +550,14 @@ export default function TransaksiJualForm({
                             <Button onClick={onCancel} style={{ marginLeft: 8 }} disabled={isSaving}>Batal</Button>
                         </Col>
                         <Col>
-                            <Button type="primary" htmlType="submit" loading={isSaving} size="large">
+                            <Button 
+                                type="primary" 
+                                htmlType="submit" 
+                                loading={isSaving} 
+                                size="large"
+                                // REQ: Disable button jika tanggal kosong (selectedTanggal null/undefined)
+                                disabled={!selectedTanggal || isGeneratingInvoice}
+                            >
                                 Simpan Transaksi
                             </Button>
                         </Col>
