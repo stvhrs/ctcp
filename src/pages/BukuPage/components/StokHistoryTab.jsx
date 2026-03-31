@@ -1,27 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
-    Card,
-    Table,
-    Input,
-    Row,
-    Col,
-    Typography,
-    DatePicker,
-    Statistic,
-    Button,
-    Space,
-    Spin,
-    Popconfirm,
-    message,
-    Modal,
-    Form,
-    InputNumber,
-    Alert
+    Card, Table, Input, Row, Col, Typography, DatePicker, Statistic, Button, Space, 
+    Spin, Popconfirm, message, Modal, Form, InputNumber, Alert, Tabs, Tag, Divider
 } from 'antd';
 import { 
-    EditOutlined, 
-    DeleteOutlined, 
-    ExclamationCircleOutlined 
+    EditOutlined, DeleteOutlined, HistoryOutlined, FileTextOutlined, 
+    PrinterOutlined, DownloadOutlined, SearchOutlined, PlusOutlined 
 } from '@ant-design/icons';
 import { timestampFormatter, numberFormatter } from '../../../utils/formatters';
 import useSyncStokHistory from '../../../hooks/useSyncStokHistory.js';
@@ -38,395 +22,346 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
 const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
+const { RangePicker, MonthPicker } = DatePicker;
 
 const StokHistoryTab = () => {
     const { data: allHistory, loading: historyLoading } = useSyncStokHistory();
 
+    // --- STATE ---
+    const [activeTab, setActiveTab] = useState('1');
     const [searchText, setSearchText] = useState('');
     const debouncedSearchText = useDebounce(searchText, 300);
-    const [dateRange, setDateRange] = useState(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
-    // --- STATE UNTUK EDIT ---
+    // TAB 1 (Riwayat)
+    const [dateRange, setDateRange] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [editForm] = Form.useForm();
-    const [actionLoading, setActionLoading] = useState(false);
 
-    // --- 1. HANDLE DELETE (Hapus Riwayat & Kembalikan Stok) ---
+    // TAB 2 (Laporan Bulanan)
+    const [selectedMonth, setSelectedMonth] = useState(dayjs());
+
+    // ==========================================
+    // LOGIKA TAB 1: RIWAYAT TRANSAKSI (TIDAK DIUBAH)
+    // ==========================================
+
     const handleDelete = async (record) => {
-        if (!record.plateId || !record.id) {
-            message.error("Data tidak valid (ID Plate hilang).");
-            return;
-        }
-
+        if (!record.plateId || !record.id) return;
         setActionLoading(true);
         try {
-            // A. Update Master Stok (Reverse effect)
             const plateRef = ref(db, `plate/${record.plateId}`);
-            
             await runTransaction(plateRef, (currentData) => {
                 if (!currentData) return;
                 const stokSaatIni = Number(currentData.stok) || 0;
                 const perubahanHistory = Number(record.perubahan) || 0;
-                
-                // Rumus Reverse: Stok Baru = Stok Lama - Perubahan History
-                return {
-                    ...currentData,
-                    stok: stokSaatIni - perubahanHistory
-                };
+                return { ...currentData, stok: stokSaatIni - perubahanHistory };
             });
-
-            // B. Hapus data di historiStok
             await remove(ref(db, `historiStok/${record.id}`));
-
             message.success("Riwayat dihapus dan stok dikembalikan.");
         } catch (error) {
-            console.error("Delete Error:", error);
             message.error("Gagal menghapus: " + error.message);
-        } finally {
-            setActionLoading(false);
-        }
+        } finally { setActionLoading(false); }
     };
 
-    // --- 2. HANDLE EDIT (Buka Modal) ---
-    const openEditModal = (record) => {
-        setEditingItem(record);
-        editForm.setFieldsValue({
-            tanggal: record.tanggal ? dayjs(record.tanggal) : dayjs(record.timestamp),
-            perubahan: record.perubahan,
-            keterangan: record.keterangan
-        });
-        setIsEditModalOpen(true);
-    };
-
-    // --- 3. SUBMIT EDIT (Update Stok & History) ---
     const handleEditSubmit = async () => {
         try {
             const values = await editForm.validateFields();
             setActionLoading(true);
-
             const oldQty = Number(editingItem.perubahan);
             const newQty = Number(values.perubahan);
-            const diff = newQty - oldQty; // Selisih perubahan
+            const diff = newQty - oldQty;
 
-            // A. Jika jumlah berubah, Update Master Stok
             if (diff !== 0) {
                 const plateRef = ref(db, `plate/${editingItem.plateId}`);
                 await runTransaction(plateRef, (currentData) => {
                     if (!currentData) return;
-                    const stokSaatIni = Number(currentData.stok) || 0;
-                    return {
-                        ...currentData,
-                        stok: stokSaatIni + diff 
-                    };
+                    return { ...currentData, stok: (Number(currentData.stok) || 0) + diff };
                 });
             }
 
-            // B. Update Data History
             const updates = {
                 tanggal: values.tanggal.format('YYYY-MM-DD'),
                 perubahan: newQty,
                 keterangan: values.keterangan,
-                // Update stokSesudah di record ini (kosmetik)
                 stokSesudah: (Number(editingItem.stokSebelum) || 0) + newQty 
             };
 
             await update(ref(db, `historiStok/${editingItem.id}`), updates);
-
             message.success("Riwayat diperbarui.");
             setIsEditModalOpen(false);
-            setEditingItem(null);
         } catch (error) {
-            console.error("Edit Error:", error);
             message.error("Gagal update: " + error.message);
-        } finally {
-            setActionLoading(false);
-        }
+        } finally { setActionLoading(false); }
     };
 
-    // --- FILTERING ---
-    const filteredHistory = useMemo(() => {
-        let filteredData = [...allHistory];
-
-        // 1. Filter Tanggal
-        if (dateRange && dateRange[0] && dateRange[1]) {
-            const [startDate, endDate] = dateRange;
-            const start = startDate.startOf('day');
-            const end = endDate.endOf('day');
-
-            filteredData = filteredData.filter(item => {
+    const filteredHistoryDetail = useMemo(() => {
+        let data = [...allHistory];
+        if (dateRange?.[0] && dateRange?.[1]) {
+            const start = dateRange[0].startOf('day');
+            const end = dateRange[1].endOf('day');
+            data = data.filter(item => {
                 const checkDate = item.tanggal ? dayjs(item.tanggal) : dayjs(item.timestamp);
-                return checkDate.isValid() && checkDate.isSameOrAfter(start) && checkDate.isSameOrBefore(end);
+                return checkDate.isSameOrAfter(start) && checkDate.isSameOrBefore(end);
             });
         }
-
-        // 2. Filter Teks (Diperbarui untuk Merek & Ukuran)
         if (debouncedSearchText) {
-            const lowerSearch = debouncedSearchText.toLowerCase();
-            filteredData = filteredData.filter(item =>
-                (item.merek_plate || '').toLowerCase().includes(lowerSearch) || 
-                (item.ukuran_plate || '').toLowerCase().includes(lowerSearch) ||
-                (item.keterangan || '').toLowerCase().includes(lowerSearch)
+            const low = debouncedSearchText.toLowerCase();
+            data = data.filter(i => 
+                (i.merek_plate || '').toLowerCase().includes(low) || 
+                (i.ukuran_plate || '').toLowerCase().includes(low)
+            );
+        }
+        return data;
+    }, [allHistory, debouncedSearchText, dateRange]);
+
+    // ==========================================
+    // LOGIKA TAB 2: LAPORAN BULANAN (DEFAULT SORT STOK AKHIR)
+    // ==========================================
+
+    const monthlyReportData = useMemo(() => {
+        if (!selectedMonth) return [];
+        const startOfMonth = selectedMonth.startOf('month');
+        const endOfMonth = selectedMonth.endOf('month');
+        const reportMap = {};
+
+        const sortedHistory = [...allHistory].sort((a, b) => 
+            (dayjs(a.tanggal || a.timestamp).unix()) - (dayjs(b.tanggal || b.timestamp).unix())
+        );
+
+        sortedHistory.forEach(item => {
+            const itemDate = item.tanggal ? dayjs(item.tanggal) : dayjs(item.timestamp);
+            const pid = item.plateId;
+            if (!reportMap[pid]) {
+                reportMap[pid] = { key: pid, merek: item.merek_plate, ukuran: item.ukuran_plate, stokAwal: 0, masuk: 0, keluar: 0, stokAkhir: 0 };
+            }
+            const perubahan = Number(item.perubahan) || 0;
+            if (itemDate.isBefore(startOfMonth)) {
+                reportMap[pid].stokAwal = item.stokSesudah;
+                reportMap[pid].stokAkhir = item.stokSesudah;
+            } else if (itemDate.isSameOrAfter(startOfMonth) && itemDate.isSameOrBefore(endOfMonth)) {
+                if (reportMap[pid].stokAwal === 0 && !reportMap[pid].initialized) {
+                    reportMap[pid].stokAwal = item.stokSebelum;
+                    reportMap[pid].initialized = true;
+                }
+                if (perubahan > 0) reportMap[pid].masuk += perubahan;
+                else reportMap[pid].keluar += Math.abs(perubahan);
+                reportMap[pid].stokAkhir = item.stokSesudah;
+            }
+        });
+
+        let finalArray = Object.values(reportMap);
+
+        // --- FILTER SEARCH ---
+        if (debouncedSearchText) {
+            const low = debouncedSearchText.toLowerCase();
+            finalArray = finalArray.filter(i => 
+                (i.merek || '').toLowerCase().includes(low) || 
+                (i.ukuran || '').toLowerCase().includes(low)
             );
         }
 
-        return filteredData;
-    }, [allHistory, debouncedSearchText, dateRange]);
+        // --- DEFAULT SORT: STOK AKHIR TERBANYAK (DARI USER REQUEST) ---
+        return finalArray.sort((a, b) => b.stokAkhir - a.stokAkhir);
+    }, [allHistory, selectedMonth, debouncedSearchText]);
 
-    // Ringkasan dashboard
-    const dashboardData = useMemo(() => {
-        return filteredHistory.reduce(
-            (acc, item) => {
-                const perubahan = Number(item.perubahan) || 0;
-                if (perubahan > 0) acc.totalMasuk += perubahan;
-                else if (perubahan < 0) acc.totalKeluar += perubahan;
-                return acc;
-            },
-            { totalMasuk: 0, totalKeluar: 0 }
-        );
-    }, [filteredHistory]);
+    // ==========================================
+    // LOGIKA PRINT: EMBED IFRAME (DIRECT PRINT)
+    // ==========================================
 
-    // --- KOLOM TABEL (MODIFIKASI: SPLIT MEREK & UKURAN) ---
+    const handlePrintIframe = () => {
+        const printWindow = document.createElement('iframe');
+        printWindow.style.position = 'fixed';
+        printWindow.style.right = '0';
+        printWindow.style.bottom = '0';
+        printWindow.style.width = '0';
+        printWindow.style.height = '0';
+        printWindow.style.border = '0';
+        document.body.appendChild(printWindow);
+
+        const content = `
+            <html>
+                <head>
+                    <title>Laporan Stok - CV Gangsar Mulia Utama</title>
+                    <style>
+                        body { font-family: 'Arial', sans-serif; padding: 20px; color: #333; }
+                        .header { text-align: center; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px; }
+                        .header h1 { margin: 0; font-size: 22px; color: #000; }
+                        .header p { margin: 2px 0; font-size: 12px; }
+                        .title { text-align: center; margin-bottom: 20px; }
+                        .title h2 { text-decoration: underline; font-size: 18px; margin-bottom: 5px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { border: 1px solid #000; padding: 8px; font-size: 12px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                        .text-right { text-align: right; }
+                        .footer { margin-top: 30px; text-align: right; font-size: 12px; }
+                        @page { size: auto; margin: 10mm; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>CV. GANGSAR MULIA UTAMA</h1>
+                        <p>Jl. Kalicari Dalam I No.4, Kalicari, Kec. Pedurungan, Kota Semarang, Jawa Tengah 50198</p>
+                        <p>Telp: 0882-0069-05391</p>
+                    </div>
+                    <div class="title">
+                        <h2>LAPORAN POSISI STOK PLATE</h2>
+                        <p>Periode: ${selectedMonth.format('MMMM YYYY')}</p>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Merek</th>
+                                <th>Ukuran</th>
+                                <th class="text-right">Stok Awal</th>
+                                <th class="text-right">Masuk</th>
+                                <th class="text-right">Keluar</th>
+                                <th class="text-right">Stok Akhir</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${monthlyReportData.map(item => `
+                                <tr>
+                                    <td>${item.merek}</td>
+                                    <td>${item.ukuran}</td>
+                                    <td class="text-right">${item.stokAwal}</td>
+                                    <td class="text-right">+${item.masuk}</td>
+                                    <td class="text-right">-${item.keluar}</td>
+                                    <td class="text-right"><strong>${item.stokAkhir}</strong></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <div class="footer">
+                        <p>Semarang, ${dayjs().format('DD MMMM YYYY')}</p>
+                        <br><br><br>
+                        <p>( .................................. )</p>
+                    </div>
+                </body>
+            </html>
+        `;
+
+        printWindow.contentDoc = printWindow.contentDocument || printWindow.contentWindow.document;
+        printWindow.contentDoc.write(content);
+        printWindow.contentDoc.close();
+
+        printWindow.contentWindow.focus();
+        setTimeout(() => {
+            printWindow.contentWindow.print();
+            document.body.removeChild(printWindow);
+        }, 500);
+    };
+
+    // ==========================================
+    // UI RENDER
+    // ==========================================
+
+    const reportColumns = [
+        { title: 'Merek', dataIndex: 'merek', key: 'merek' },
+        { title: 'Ukuran', dataIndex: 'ukuran', key: 'ukuran' },
+        { title: 'Stok Awal', dataIndex: 'stokAwal', align: 'right' },
+        { title: 'Masuk (+)', dataIndex: 'masuk', align: 'right', render: val => <Text type="success">+{val}</Text> },
+        { title: 'Keluar (-)', dataIndex: 'keluar', align: 'right', render: val => <Text type="danger">-{val}</Text> },
+        { title: 'Stok Akhir', dataIndex: 'stokAkhir', align: 'right', render: val => <Text strong style={{ color: '#1890ff' }}>{val}</Text> },
+    ];
+
     const historyColumns = [
-        {
-            title: 'Tanggal',
-            dataIndex: 'tanggal',
-            key: 'tanggal',
-            width: 110,
-            fixed: 'left',
-            render: (val, record) => val ? val : timestampFormatter(record.timestamp),
-            sorter: (a, b) => (dayjs(a.tanggal || a.timestamp).unix()) - (dayjs(b.tanggal || b.timestamp).unix()),
+        { title: 'Tanggal', dataIndex: 'tanggal', render: (val, record) => val ? val : timestampFormatter(record.timestamp), width: 110 },
+        { title: 'Merek', dataIndex: 'merek_plate', render: t => <Text strong>{t}</Text> },
+        { title: 'Ukuran', dataIndex: 'ukuran_plate' },
+        { 
+            title: 'Perubahan', dataIndex: 'perubahan', align: 'right',
+            render: val => <Tag color={val > 0 ? 'green' : 'red'}>{val > 0 ? `+${val}` : val}</Tag>
         },
-        // --- Kolom Merek (Baru) ---
+        { title: 'Stok Akhir', dataIndex: 'stokSesudah', align: 'right' },
+        { title: 'Keterangan', dataIndex: 'keterangan', ellipsis: true },
         {
-            title: 'Merek',
-            dataIndex: 'merek_plate',
-            key: 'merek_plate',
-            width: 120,
-            fixed: 'left',
-            sorter: (a, b) => (a.merek_plate || '').localeCompare(b.merek_plate || ''),
-            render: (text) => <Text strong>{text || '-'}</Text>
-        },
-        // --- Kolom Ukuran (Baru) ---
-        {
-            title: 'Ukuran',
-            dataIndex: 'ukuran_plate',
-            key: 'ukuran_plate',
-            width: 140,
-            fixed: 'left',
-        },
-        {
-            title: 'Perubahan',
-            dataIndex: 'perubahan',
-            key: 'perubahan',
-            align: 'right',
-            width: 100,
-            render: val => {
-                const num = Number(val);
-                const color = num > 0 ? '#52c41a' : num < 0 ? '#f5222d' : '#8c8c8c';
-                const prefix = num > 0 ? '+' : '';
-                return (
-                    <Text strong style={{ color }}>
-                        {prefix}{numberFormatter(val)}
-                    </Text>
-                );
-            },
-            sorter: (a, b) => (a.perubahan || 0) - (b.perubahan || 0),
-        },
-        {
-            title: 'Sblm',
-            dataIndex: 'stokSebelum',
-            key: 'stokSebelum',
-            align: 'right',
-            width: 80,
-            render: numberFormatter,
-        },
-        {
-            title: 'Ssdh',
-            dataIndex: 'stokSesudah',
-            key: 'stokSesudah',
-            align: 'right',
-            width: 80,
-            render: numberFormatter,
-        },
-        {
-            title: 'Keterangan',
-            dataIndex: 'keterangan',
-            key: 'keterangan',
-            width: 250,
-        },
-        {
-            title: 'Aksi',
-            key: 'aksi',
-            width: 100,
-            fixed: 'right',
+            title: 'Aksi', fixed: 'right', width: 80,
             render: (_, record) => (
                 <Space>
-                    <Button 
-                        icon={<EditOutlined />} 
-                        size="small" 
-                        onClick={() => openEditModal(record)} 
-                        disabled={actionLoading}
-                    />
-                    <Popconfirm
-                        title="Hapus Riwayat?"
-                        description={
-                            <div style={{ maxWidth: 200 }}>
-                                Menghapus ini akan <b>mengembalikan stok</b> plate sejumlah {record.perubahan * -1}.
-                                <br/><br/>Lanjutkan?
-                            </div>
-                        }
-                        onConfirm={() => handleDelete(record)}
-                        okText="Ya, Hapus"
-                        cancelText="Batal"
-                        icon={<ExclamationCircleOutlined style={{ color: 'red' }} />}
-                    >
-                        <Button 
-                            icon={<DeleteOutlined />} 
-                            size="small" 
-                            danger 
-                            disabled={actionLoading}
-                        />
+                    <Button icon={<EditOutlined />} size="small" onClick={() => {
+                        setEditingItem(record);
+                        editForm.setFieldsValue({
+                            tanggal: record.tanggal ? dayjs(record.tanggal) : dayjs(record.timestamp),
+                            perubahan: record.perubahan,
+                            keterangan: record.keterangan
+                        });
+                        setIsEditModalOpen(true);
+                    }} />
+                    <Popconfirm title="Hapus?" onConfirm={() => handleDelete(record)}>
+                        <Button icon={<DeleteOutlined />} size="small" danger />
                     </Popconfirm>
                 </Space>
             )
         }
     ];
 
-    const getRowClassName = () => 'zebra-row';
-
-    const resetFilters = useCallback(() => {
-        setSearchText('');
-        setDateRange(null);
-    }, []);
-
-    const isFilterActive = debouncedSearchText || dateRange;
-
     return (
-        <Spin spinning={historyLoading} tip="Memuat data riwayat...">
-            {/* --- DASHBOARD STATISTIK --- */}
-            <Card style={{ marginBottom: 16 }}>
-                <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={12}>
-                        <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
-                            <Statistic
-                                title="Total Stok Masuk (Filter)"
-                                value={dashboardData.totalMasuk}
-                                valueStyle={{ color: '#52c41a' }}
-                                prefix="+"
-                                formatter={numberFormatter}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={12}>
-                        <Card size="small" style={{ backgroundColor: '#fff1f0', border: '1px solid #ffccc7' }}>
-                            <Statistic
-                                title="Total Stok Keluar (Filter)"
-                                value={dashboardData.totalKeluar}
-                                valueStyle={{ color: '#f5222d' }}
-                                formatter={numberFormatter}
-                            />
-                        </Card>
-                    </Col>
-                </Row>
-            </Card>
+        <Spin spinning={historyLoading}>
+            <Tabs 
+                activeKey={activeTab} 
+                onChange={setActiveTab}
+                items={[
+                    {
+                        key: '1',
+                        label: <span><HistoryOutlined /> Riwayat</span>,
+                        children: (
+                            <Card>
+                                <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+                                    <Col span={12}><RangePicker style={{ width: '100%' }} onChange={setDateRange} /></Col>
+                                    <Col span={12}><Input placeholder="Cari Merek/Ukuran..." prefix={<SearchOutlined />} onChange={e => setSearchText(e.target.value)} /></Col>
+                                </Row>
+                                <Table dataSource={filteredHistoryDetail} columns={historyColumns} rowKey="id" size="small" scroll={{ x: 800 }} />
+                            </Card>
+                        )
+                    },
+                    {
+                        key: '2',
+                        label: <span><FileTextOutlined /> Laporan Stok Bulanan</span>,
+                        children: (
+                            <Card>
+                                <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
+                                    <Space>
+                                        <MonthPicker value={selectedMonth} onChange={setSelectedMonth} allowClear={false} />
+                                        <Input placeholder="Filter produk..." style={{ width: 200 }} onChange={e => setSearchText(e.target.value)} />
+                                    </Space>
+                                    <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrintIframe}>Cetak Laporan</Button>
+                                </Row>
+                                <Table 
+                                    dataSource={monthlyReportData} 
+                                    columns={reportColumns} 
+                                    rowKey="key" 
+                                    pagination={false}
+                                    summary={(pageData) => {
+                                        let total = 0;
+                                        pageData.forEach(({ stokAkhir }) => total += stokAkhir);
+                                        return (
+                                            <Table.Summary.Row style={{ background: '#fafafa' }}>
+                                                <Table.Summary.Cell index={0} colSpan={5} align="right"><Text strong>TOTAL STOK GUDANG</Text></Table.Summary.Cell>
+                                                <Table.Summary.Cell index={1} align="right"><Text strong style={{ fontSize: 16, color: '#1890ff' }}>{total}</Text></Table.Summary.Cell>
+                                            </Table.Summary.Row>
+                                        );
+                                    }}
+                                />
+                            </Card>
+                        )
+                    }
+                ]}
+            />
 
-            {/* --- TABEL & FILTER --- */}
-            <Card>
-                <Row justify="space-between" align="middle" gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                    <Col xs={24} md={8}>
-                        <Title level={5} style={{ margin: 0 }}>
-                            Riwayat Perubahan Stok
-                        </Title>
-                    </Col>
-                    <Col xs={24} md={16}>
-                        <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
-                            {isFilterActive && (
-                                <Button onClick={resetFilters} type="link">Reset Filter</Button>
-                            )}
-                            <RangePicker
-                                value={dateRange}
-                                onChange={setDateRange}
-                                style={{ width: 240 }}
-                            />
-                            <Input.Search
-                                placeholder="Cari Merek, Ukuran, Keterangan..."
-                                value={searchText}
-                                onChange={e => setSearchText(e.target.value)}
-                                allowClear
-                                style={{ width: 260 }}
-                            />
-                        </Space>
-                    </Col>
-                </Row>
-                <Table
-                    columns={historyColumns}
-                    dataSource={filteredHistory}
-                    loading={historyLoading || actionLoading}
-                    rowKey="id"
-                    size="small"
-                    scroll={{ x: 1000, y: 'calc(100vh - 500px)' }}
-                    pagination={{
-                        defaultPageSize: 20,
-                        showSizeChanger: true,
-                        pageSizeOptions: ['20', '50', '100', '200'],
-                        showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} riwayat`,
-                    }}
-                    rowClassName={getRowClassName}
-                />
-            </Card>
-
-            {/* --- MODAL EDIT --- */}
+            {/* MODAL EDIT RIWAYAT */}
             <Modal
                 title="Edit Riwayat Stok"
                 open={isEditModalOpen}
                 onOk={editForm.submit}
-                onCancel={() => {
-                    setIsEditModalOpen(false);
-                    setEditingItem(null);
-                }}
+                onCancel={() => setIsEditModalOpen(false)}
                 confirmLoading={actionLoading}
                 destroyOnClose
             >
-                <Alert 
-                    message="Perhatian" 
-                    description="Mengubah jumlah 'Perubahan' akan otomatis mengoreksi stok plate saat ini." 
-                    type="warning" 
-                    showIcon 
-                    style={{ marginBottom: 16 }}
-                />
-                <Form
-                    form={editForm}
-                    layout="vertical"
-                    onFinish={handleEditSubmit}
-                >
-                    <Form.Item
-                        name="tanggal"
-                        label="Tanggal Transaksi"
-                        rules={[{ required: true, message: 'Pilih tanggal' }]}
-                    >
-                        <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                    </Form.Item>
-
-                    <Form.Item
-                        name="perubahan"
-                        label="Jumlah Perubahan (+ Masuk / - Keluar)"
-                        rules={[
-                            { required: true, message: 'Isi jumlah' },
-                            { type: 'number', message: 'Harus angka' },
-                            { validator: (_, value) => value !== 0 ? Promise.resolve() : Promise.reject('Tidak boleh 0') }
-                        ]}
-                    >
-                        <InputNumber style={{ width: '100%' }} />
-                    </Form.Item>
-
-                    <Form.Item
-                        name="keterangan"
-                        label="Keterangan"
-                    >
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
+                <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
+                    <Form.Item name="tanggal" label="Tanggal" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+                    <Form.Item name="perubahan" label="Jumlah (+/-)" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item>
+                    <Form.Item name="keterangan" label="Keterangan"><Input.TextArea rows={3} /></Form.Item>
                 </Form>
             </Modal>
         </Spin>

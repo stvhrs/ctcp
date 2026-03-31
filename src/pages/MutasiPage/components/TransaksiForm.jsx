@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Modal, Form, Input, InputNumber, DatePicker, Radio, Select, Upload, Button, Card, Empty, Typography, Spin,
-    message, Row, Col, Tag, Divider
+    Modal, Form, Input, InputNumber, DatePicker, Radio, Select, Upload, Button, Card, 
+    Empty, Typography, Spin, message, Row, Col, Tag, Divider, Space, Badge
 } from 'antd';
 import { 
     UploadOutlined, DeleteOutlined, UserOutlined, FileTextOutlined, 
-    WalletOutlined, BankOutlined, CalendarOutlined 
+    WalletOutlined, BankOutlined, CalendarOutlined, CheckSquareOutlined,
+    InfoCircleOutlined, ShoppingCartOutlined, DollarOutlined, ArrowRightOutlined,
+    PlusOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
-// --- Impor Firebase ---
+// --- Konfigurasi Firebase ---
 import { db, storage } from '../../../api/firebase'; 
 import { ref, push, update, get } from "firebase/database";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from 'uuid';
-// --- Akhir Impor Firebase ---
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -57,9 +58,8 @@ const TransaksiForm = ({
 }) => {
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState([]);
-    const [selectedTxnDetails, setSelectedTxnDetails] = useState(null);
+    const [selectedInvoices, setSelectedInvoices] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
-    const [modal, contextHolder] = Modal.useModal();
 
     const watchingTipe = Form.useWatch('tipe', form);
     const watchingKategori = Form.useWatch('kategori', form);
@@ -67,547 +67,287 @@ const TransaksiForm = ({
     const isInvoicePayment = INVOICE_PAYMENT_CATEGORIES.includes(watchingKategori);
 
     const payableInvoices = useMemo(() => {
-        let list = [];
         if (watchingKategori === 'penjualan_plate') {
-            list = unpaidJual.map(tx => ({ ...tx, tipeTransaksi: "Penjualan Plate" }));
+            return unpaidJual.filter(tx => tx.statusPembayaran !== 'Lunas');
         }
-        return list.filter(tx => tx.statusPembayaran !== 'Lunas');
+        return [];
     }, [watchingKategori, unpaidJual]);
+
+    const totalSisaSelected = useMemo(() => {
+        return selectedInvoices.reduce((acc, curr) => acc + (curr.totalTagihan - (curr.jumlahTerbayar || 0)), 0);
+    }, [selectedInvoices]);
 
     useEffect(() => {
         if (!open) {
             form.resetFields();
             setFileList([]);
-            setSelectedTxnDetails(null);
+            setSelectedInvoices([]);
             return;
         }
 
         if (initialValues) {
-            // --- MODE EDIT ---
             const currentJumlah = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
-
             form.setFieldsValue({
                 ...initialValues,
                 tanggal: initialValues.tanggal ? dayjs(initialValues.tanggal) : dayjs(initialValues.tanggalBayar),
                 jumlah: currentJumlah,
                 kategori: initialValues.kategori || initialValues.tipeMutasi,
                 tipe: initialValues.tipe || 'pemasukan',
-                metode: initialValues.metode || 'Transfer'
+                metode: initialValues.metode || 'Transfer',
+                idTransaksi: initialValues.idTransaksi ? [initialValues.idTransaksi] : []
             });
-
             if (initialValues.idTransaksi) {
-                const originalTxn = [...unpaidJual].find(
-                    tx => tx.id === initialValues.idTransaksi
-                );
-
-                if (originalTxn) {
-                    setSelectedTxnDetails({
-                        ...originalTxn,
-                        jumlahTerbayar: originalTxn.jumlahTerbayar - currentJumlah,
-                    });
-                } else {
-                    const totalTagihanEstimasi = (initialValues.totalTagihan || 0) || currentJumlah + (initialValues.sisaTagihan || 0);
-                    setSelectedTxnDetails({
-                        nomorInvoice: initialValues.keterangan?.split(' ')[2] || 'Invoice Tidak Ditemukan',
-                        namaPelanggan: initialValues.keterangan?.split('(')[1]?.replace(')', '') || 'N/A',
-                        totalTagihan: totalTagihanEstimasi,
-                        jumlahTerbayar: Math.max(0, totalTagihanEstimasi - currentJumlah),
-                    });
-                }
+                const found = unpaidJual.find(tx => tx.id === initialValues.idTransaksi);
+                if (found) setSelectedInvoices([found]);
             }
-
             if (initialValues.buktiUrl) {
-                setFileList([{ uid: '-1', name: 'File terlampir', status: 'done', url: initialValues.buktiUrl }]);
+                setFileList([{ uid: '-1', name: 'Bukti Lama', status: 'done', url: initialValues.buktiUrl }]);
             }
         } else {
-            // --- MODE TAMBAH BARU ---
-            form.resetFields();
-            form.setFieldsValue({
-                tipe: TipeTransaksi.pemasukan,
-                tanggal: dayjs(),
-                kategori: 'pemasukan_lain',
-                metode: 'Transfer'
+            form.setFieldsValue({ 
+                tipe: TipeTransaksi.pemasukan, 
+                tanggal: dayjs(), 
+                kategori: 'pemasukan_lain', 
+                metode: 'Transfer' 
             });
         }
     }, [initialValues, open, form, unpaidJual]);
 
-
-    const handleTipeChange = (e) => {
-        const newTipe = e.target.value;
-        form.setFieldsValue({
-            kategori: newTipe === TipeTransaksi.pemasukan ? 'pemasukan_lain' : 'operasional',
-            idTransaksi: null,
-            keterangan: null,
-            jumlah: null,
-        });
-        setSelectedTxnDetails(null);
-    };
-
-    const handleKategoriChange = () => {
-        form.setFieldsValue({ idTransaksi: null, keterangan: null, jumlah: null });
-        setSelectedTxnDetails(null);
-    };
-
-    const handleTxnSelect = (selectedId) => {
-        const tx = payableInvoices.find(t => t.id === selectedId);
-        if (tx) {
-            const sisaTagihan = tx.totalTagihan - tx.jumlahTerbayar;
-            setSelectedTxnDetails(tx);
+    const handleTxnChange = (ids) => {
+        const selectedDatas = payableInvoices.filter(tx => ids.includes(tx.id));
+        setSelectedInvoices(selectedDatas);
+        
+        if (selectedDatas.length > 0) {
+            const listNomor = selectedDatas.map(d => d.nomorInvoice).join(', ');
+            const totalSisa = selectedDatas.reduce((acc, curr) => acc + (curr.totalTagihan - (curr.jumlahTerbayar || 0)), 0);
             form.setFieldsValue({
-                keterangan: `Pembayaran invoice ${tx.nomorInvoice} (${tx.namaPelanggan})`,
-                jumlah: sisaTagihan,
-                tipeTransaksi: tx.tipeTransaksi,
+                keterangan: `Pelunasan ${selectedDatas.length} Invoice: ${listNomor}`,
+                jumlah: totalSisa,
             });
         }
     };
 
-    const normFile = (e) => (Array.isArray(e) ? e : e && e.fileList);
-
-    const handleOk = () => {
-        form.validateFields()
-            .then(values => {
-                saveTransaction(values);
-            })
-            .catch((info) => {
-                console.log('Validate Failed:', info);
-            });
+    const selectAllInvoices = () => {
+        const allIds = payableInvoices.map(tx => tx.id);
+        form.setFieldsValue({ idTransaksi: allIds });
+        handleTxnChange(allIds);
     };
 
-    const saveTransaction = async (values) => {
+    const onFinish = async (values) => {
         setIsSaving(true);
-        message.loading({ content: 'Menyimpan...', key: 'saving' });
-
-        const { bukti, ...dataLain } = values;
-        const buktiFile = (bukti && bukti.length > 0 && bukti[0].originFileObj) ? bukti[0].originFileObj : null;
-        let buktiUrl = initialValues?.buktiUrl || null;
+        const processKey = 'saving_process';
+        message.loading({ content: 'Sedang menyimpan data...', key: processKey });
 
         try {
-            if (buktiFile) {
-                const safeKeterangan = (dataLain.keterangan || 'bukti').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').substring(0, 50);
-                const originalExt = buktiFile.name.split('.').pop();
-                const fileName = `${safeKeterangan}-${uuidv4()}.${originalExt}`;
-                const fileRef = storageRef(storage, `bukti_mutasi/${fileName}`);
-                await uploadBytes(fileRef, buktiFile, { contentType: buktiFile.type });
+            const { bukti, idTransaksi, ...dataLain } = values;
+            let buktiUrl = initialValues?.buktiUrl || null;
+
+            if (bukti && bukti[0]?.originFileObj) {
+                const file = bukti[0].originFileObj;
+                const fileExt = file.name.split('.').pop();
+                const fileName = `bukti/${uuidv4()}.${fileExt}`;
+                const fileRef = storageRef(storage, fileName);
+                await uploadBytes(fileRef, file);
                 buktiUrl = await getDownloadURL(fileRef);
-            } else if (initialValues && !bukti) {
-                buktiUrl = null;
             }
 
             const updates = {};
-            const isEditing = !!initialValues;
-            const mutasiId = isEditing ? initialValues.id : push(ref(db, 'mutasi')).key;
+            const mutasiId = initialValues?.id || push(ref(db, 'mutasi')).key;
+            
+            updates[`mutasi/${mutasiId}`] = {
+                ...dataLain,
+                idTransaksi: idTransaksi?.length === 1 ? idTransaksi[0] : 'BULK_PAYMENT',
+                listInvoiceIds: idTransaksi || [],
+                tanggal: dataLain.tanggal.valueOf(),
+                buktiUrl,
+                nama: selectedInvoices.length > 0 ? selectedInvoices[0].namaPelanggan : "Admin",
+                metode: dataLain.metode,
+                updatedAt: new Date().toISOString()
+            };
 
-            let dataToSave = {};
-            let oldPaymentAmount = 0;
-            let oldInvoiceId = null;
-
-            if (isEditing) {
-                if (initialValues.idTransaksi) {
-                    oldPaymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
-                    oldInvoiceId = initialValues.idTransaksi;
-                }
-            }
-
-            let namaEntitas = "Admin";
-            if (dataLain.idTransaksi) {
-                const invoiceTerkait = unpaidJual.find(inv => inv.id === dataLain.idTransaksi);
-                if (invoiceTerkait) {
-                    namaEntitas = invoiceTerkait.namaPelanggan;
-                } else if (selectedTxnDetails) {
-                    namaEntitas = selectedTxnDetails.namaPelanggan;
-                }
-            }
-
-            if (dataLain.idTransaksi) {
-                // --- PEMBAYARAN INVOICE ---
-                const newPaymentAmount = Number(dataLain.jumlah);
-                dataToSave = {
-                    idTransaksi: dataLain.idTransaksi,
-                    tipeTransaksi: dataLain.tipeTransaksi,
-                    jumlahBayar: newPaymentAmount,
-                    tanggalBayar: dataLain.tanggal.valueOf(),
-                    tipeMutasi: dataLain.kategori,
-                    keterangan: dataLain.keterangan,
-                    buktiUrl,
-                    tipe: TipeTransaksi.pemasukan,
-                    kategori: dataLain.kategori,
-                    jumlah: newPaymentAmount,
-                    tanggal: dataLain.tanggal.valueOf(),
-                    nama: namaEntitas,
-                    metode: dataLain.metode
-                };
-
-                updates[`mutasi/${mutasiId}`] = dataToSave;
-
-                const invoiceDbPath = 'transaksiJualPlate';
-                const invoiceRef = ref(db, `${invoiceDbPath}/${dataLain.idTransaksi}`);
-                const invoiceSnapshot = await get(invoiceRef);
-                if (!invoiceSnapshot.exists()) throw new Error("Invoice terkait tidak ditemukan!");
-
-                const invoiceData = invoiceSnapshot.val();
-                let currentPaid = invoiceData.jumlahTerbayar || 0;
-                let currentHistory = invoiceData.riwayatPembayaran || {};
-
-                if (isEditing) {
-                    if (oldInvoiceId === dataLain.idTransaksi) {
-                        currentPaid = (currentPaid - oldPaymentAmount) + newPaymentAmount;
-                        currentHistory[mutasiId] = {
-                            tanggal: dataLain.tanggal.valueOf(),
-                            jumlah: newPaymentAmount,
-                            mutasiId: mutasiId,
-                            keterangan: dataToSave.keterangan
-                        };
-                    } else {
-                        if (oldInvoiceId) {
-                            const oldInvoiceDbPath = 'transaksiJualPlate';
-                            const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
-                            const oldInvSnapshot = await get(oldInvoiceRef);
-                            if (oldInvSnapshot.exists()) {
-                                const oldInvData = oldInvSnapshot.val();
-                                const oldPaid = (oldInvData.jumlahTerbayar || 0) - oldPaymentAmount;
-                                const oldHistory = oldInvData.riwayatPembayaran || {};
-                                delete oldHistory[mutasiId];
-                                const oldStatus = (oldPaid <= 0) ? 'Belum Bayar' : (oldPaid < oldInvData.totalTagihan) ? 'DP' : 'Lunas';
-                                updates[`${oldInvoiceDbPath}/${oldInvoiceId}/jumlahTerbayar`] = oldPaid;
-                                updates[`${oldInvoiceDbPath}/${oldInvoiceId}/riwayatPembayaran`] = oldHistory;
-                                updates[`${oldInvoiceDbPath}/${oldInvoiceId}/statusPembayaran`] = oldStatus;
-                            }
-                        }
-                        currentPaid = currentPaid + newPaymentAmount;
-                        currentHistory[mutasiId] = {
-                            tanggal: dataLain.tanggal.valueOf(),
-                            jumlah: newPaymentAmount,
-                            mutasiId: mutasiId,
-                            keterangan: dataToSave.keterangan
-                        };
-                    }
-                } else {
-                    currentPaid = currentPaid + newPaymentAmount;
-                    currentHistory[mutasiId] = {
+            if (isInvoicePayment && selectedInvoices.length > 0) {
+                for (const inv of selectedInvoices) {
+                    const sisa = inv.totalTagihan - (inv.jumlahTerbayar || 0);
+                    const invPath = `transaksiJualPlate/${inv.id}`;
+                    updates[`${invPath}/jumlahTerbayar`] = (inv.jumlahTerbayar || 0) + sisa;
+                    updates[`${invPath}/statusPembayaran`] = 'Lunas';
+                    updates[`${invPath}/riwayatPembayaran/${mutasiId}`] = {
                         tanggal: dataLain.tanggal.valueOf(),
-                        jumlah: newPaymentAmount,
+                        jumlah: sisa,
                         mutasiId: mutasiId,
-                        keterangan: dataToSave.keterangan
+                        keterangan: "Lunas via Pembayaran Kolektif"
                     };
-                }
-
-                const newStatus = (currentPaid <= 0) ? 'Belum Bayar' : (currentPaid >= invoiceData.totalTagihan) ? 'Lunas' : 'DP';
-                updates[`${invoiceDbPath}/${dataLain.idTransaksi}/jumlahTerbayar`] = currentPaid;
-                updates[`${invoiceDbPath}/${dataLain.idTransaksi}/riwayatPembayaran`] = currentHistory;
-                updates[`${invoiceDbPath}/${dataLain.idTransaksi}/statusPembayaran`] = newStatus;
-
-            } else {
-                // --- MUTASI UMUM ---
-                const jumlah = dataLain.tipe === TipeTransaksi.pengeluaran
-                    ? -Math.abs(Number(dataLain.jumlah))
-                    : Number(dataLain.jumlah);
-
-                dataToSave = {
-                    jumlah,
-                    kategori: dataLain.kategori,
-                    keterangan: dataLain.keterangan,
-                    tanggal: dataLain.tanggal.valueOf(),
-                    tipe: dataLain.tipe,
-                    buktiUrl,
-                    tipeMutasi: dataLain.kategori,
-                    nama: "Admin",
-                    metode: dataLain.metode
-                };
-
-                updates[`mutasi/${mutasiId}`] = dataToSave;
-
-                if (isEditing && oldInvoiceId) {
-                    const oldInvoiceDbPath = 'transaksiJualPlate';
-                    const oldInvoiceRef = ref(db, `${oldInvoiceDbPath}/${oldInvoiceId}`);
-                    const oldInvSnapshot = await get(oldInvoiceRef);
-                    if (oldInvSnapshot.exists()) {
-                        const oldInvData = oldInvSnapshot.val();
-                        const oldPaid = (oldInvData.jumlahTerbayar || 0) - oldPaymentAmount;
-                        const oldHistory = oldInvData.riwayatPembayaran || {};
-                        delete oldHistory[mutasiId];
-                        const oldStatus = (oldPaid <= 0) ? 'Belum Bayar' : (oldPaid < oldInvData.totalTagihan) ? 'DP' : 'Lunas';
-                        updates[`${oldInvoiceDbPath}/${oldInvoiceId}/jumlahTerbayar`] = oldPaid;
-                        updates[`${oldInvoiceDbPath}/${oldInvoiceId}/riwayatPembayaran`] = oldHistory;
-                        updates[`${oldInvoiceDbPath}/${oldInvoiceId}/statusPembayaran`] = oldStatus;
-                    }
                 }
             }
 
             await update(ref(db), updates);
-            message.success({ content: isEditing ? 'Mutasi berhasil diperbarui' : 'Mutasi berhasil ditambahkan', key: 'saving', duration: 2 });
+            message.success({ content: 'Transaksi berhasil dicatat!', key: processKey, duration: 3 });
             onCancel();
         } catch (error) {
-            console.error("Error saving transaction: ", error);
-            message.error({ content: `Terjadi kesalahan: ${error.message}`, key: 'saving', duration: 4 });
+            console.error(error);
+            message.error({ content: 'Gagal: ' + error.message, key: processKey });
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleDelete = () => {
-        if (!initialValues) return;
-        modal.confirm({
-            title: 'Konfirmasi Hapus',
-            content: 'Yakin hapus data ini? Saldo invoice terkait akan dikembalikan (jika ada).',
-            okText: 'Ya, Hapus',
-            okType: 'danger',
-            cancelText: 'Batal',
-            onOk: async () => {
-                setIsSaving(true);
-                message.loading({ content: 'Menghapus...', key: 'deleting' });
-                try {
-                    const mutasiId = initialValues.id;
-                    const updates = {};
-                    updates[`mutasi/${mutasiId}`] = null;
-
-                    if (initialValues.idTransaksi) {
-                        const paymentAmount = Math.abs(initialValues.jumlahBayar || initialValues.jumlah || 0);
-                        const invoiceDbPath = 'transaksiJualPlate';
-                        const invoiceRef = ref(db, `${invoiceDbPath}/${initialValues.idTransaksi}`);
-                        const invoiceSnapshot = await get(invoiceRef);
-                        if (invoiceSnapshot.exists()) {
-                            const invoiceData = invoiceSnapshot.val();
-                            const currentPaid = (invoiceData.jumlahTerbayar || 0) - paymentAmount;
-                            const currentHistory = invoiceData.riwayatPembayaran || {};
-                            delete currentHistory[mutasiId];
-                            const newStatus = (currentPaid <= 0) ? 'Belum Bayar' : (currentPaid >= invoiceData.totalTagihan) ? 'Lunas' : 'DP';
-                            updates[`${invoiceDbPath}/${initialValues.idTransaksi}/jumlahTerbayar`] = currentPaid;
-                            updates[`${invoiceDbPath}/${initialValues.idTransaksi}/riwayatPembayaran`] = currentHistory;
-                            updates[`${invoiceDbPath}/${initialValues.idTransaksi}/statusPembayaran`] = newStatus;
-                        }
-                    }
-                    await update(ref(db), updates);
-                    message.success({ content: 'Dihapus', key: 'deleting', duration: 2 });
-                    onCancel();
-                } catch (error) {
-                    message.error({ content: `Gagal: ${error.message}`, key: 'deleting', duration: 4 });
-                } finally {
-                    setIsSaving(false);
-                }
-            },
-        });
-    };
-
     return (
         <Modal
             open={open}
-            title={<Title level={4} style={{ margin: 0 }}>{initialValues ? '✏️ Edit Transaksi' : '➕ Transaksi Baru'}</Title>}
+            title={
+                <Space>
+                    <div style={{ background: '#f0f5ff', padding: '10px', borderRadius: '10px' }}>
+                        {initialValues ? <FileTextOutlined style={{ color: '#2f54eb' }} /> : <PlusOutlined style={{ color: '#2f54eb' }} />}
+                    </div>
+                    <div style={{ lineHeight: '1.2' }}>
+                        <Title level={5} style={{ margin: 0 }}>{initialValues ? 'Detail & Edit Transaksi' : 'Catat Transaksi Baru'}</Title>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>Input arus kas masuk dan keluar perusahaan</Text>
+                    </div>
+                </Space>
+            }
             onCancel={onCancel}
-            destroyOnClose
-            confirmLoading={isSaving}
-            width={600}
-            // --- UI 1: Posisi Top Center ---
-            style={{ top: 20 }} 
+            width={680}
+            centered
             footer={[
-                contextHolder,
-                initialValues && (
-                    <Button key="delete" danger icon={<DeleteOutlined />} onClick={handleDelete} loading={isSaving} style={{ float: 'left' }}>
-                        Hapus
-                    </Button>
-                ),
-                <Button key="back" onClick={onCancel} disabled={isSaving}>Batal</Button>,
-                <Button key="submit" type="primary" loading={isSaving} onClick={handleOk}>Simpan</Button>,
+                <Button key="cancel" onClick={onCancel} size="large" style={{ borderRadius: '8px' }}>Batal</Button>,
+                <Button key="submit" type="primary" size="large" icon={<DollarOutlined />} 
+                        loading={isSaving} onClick={() => form.submit()} 
+                        style={{ borderRadius: '8px', paddingInline: '32px', backgroundColor: '#2f54eb' }}>
+                    Simpan Transaksi
+                </Button>
             ]}
         >
-            <Divider style={{ margin: '12px 0 24px 0' }} />
-            
-            <Form form={form} layout="vertical" name="transaksi_form">
+            <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false} style={{ marginTop: '10px' }}>
                 
-                {/* --- UI 2: Row/Col untuk Tampilan Dashboard yang Rapi --- */}
-                <Row gutter={16}>
-                    <Col span={12}>
-                        <Form.Item name="tanggal" label="Tanggal" rules={[{ required: true, message: 'Wajib diisi!' }]}>
-                            <DatePicker style={{ width: '100%' }} format="DD MMM YYYY" suffixIcon={<CalendarOutlined />} />
-                        </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                        <Form.Item name="metode" label="Metode" rules={[{ required: true, message: 'Wajib dipilih!' }]}>
-                            <Select placeholder="Pilih metode">
-                                <Option value="Transfer"><BankOutlined /> Transfer</Option>
-                                <Option value="Tunai"><WalletOutlined /> Tunai</Option>
-                            </Select>
-                        </Form.Item>
-                    </Col>
-                </Row>
+                {/* --- INFORMASI METADATA --- */}
+                <Card size="small" style={{ borderRadius: '12px', marginBottom: '16px', background: '#fafafa', border: 'none' }}>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="tanggal" label={<Text strong>Tanggal</Text>} rules={[{ required: true }]}>
+                                <DatePicker style={{ width: '100%', borderRadius: '6px' }} format="DD/MM/YYYY" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="metode" label={<Text strong>Metode</Text>} rules={[{ required: true }]}>
+                                <Select placeholder="Pilih Metode" style={{ borderRadius: '6px' }}>
+                                    <Option value="Transfer"><Space><BankOutlined /> Transfer Bank</Space></Option>
+                                    <Option value="Tunai"><Space><WalletOutlined /> Tunai / Cash</Space></Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="tipe" label={<Text strong>Jenis Arus Kas</Text>}>
+                                <Radio.Group buttonStyle="solid" style={{ width: '100%' }}>
+                                    <Radio.Button value="pemasukan" style={{ width: '50%', textAlign: 'center' }}>Masuk</Radio.Button>
+                                    <Radio.Button value="pengeluaran" style={{ width: '50%', textAlign: 'center' }}>Keluar</Radio.Button>
+                                </Radio.Group>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="kategori" label={<Text strong>Kategori</Text>} rules={[{ required: true }]}>
+                                <Select placeholder="Pilih Kategori">
+                                    {(watchingTipe === 'pemasukan' ? Object.entries(KategoriPemasukan) : Object.entries(KategoriPengeluaran))
+                                        .map(([key, value]) => (<Option key={key} value={key}>{value}</Option>))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                </Card>
 
-                <Row gutter={16}>
-                    <Col span={12}>
-                        <Form.Item name="tipe" label="Tipe Transaksi">
-                            <Radio.Group onChange={handleTipeChange} disabled={!!initialValues?.idTransaksi} buttonStyle="solid" style={{ width: '100%' }}>
-                                <Radio.Button value={TipeTransaksi.pemasukan} style={{ width: '50%', textAlign: 'center' }}>Masuk</Radio.Button>
-                                <Radio.Button value={TipeTransaksi.pengeluaran} style={{ width: '50%', textAlign: 'center' }}>Keluar</Radio.Button>
-                            </Radio.Group>
-                        </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                        <Form.Item name="kategori" label="Kategori" rules={[{ required: true, message: 'Wajib diisi!' }]}>
-                            <Select placeholder="Pilih kategori" onChange={handleKategoriChange} disabled={!!initialValues?.idTransaksi}>
-                                {(watchingTipe === TipeTransaksi.pemasukan ? Object.entries(KategoriPemasukan) : Object.entries(KategoriPengeluaran))
-                                    .map(([key, value]) => (<Option key={key} value={key}>{value}</Option>))}
-                            </Select>
-                        </Form.Item>
-                    </Col>
-                </Row>
-
-                {isInvoicePayment ? (
-                    <>
-                         {/* --- UI 3: Dropdown Invoice yang "Rich" --- */}
-                    {/* ... kode sebelumnya ... */}
-
-                        <Form.Item
-                            name="idTransaksi"
-                            label="Pilih Invoice (Pelanggan)"
-                            rules={[{ required: true, message: 'Invoice wajib dipilih!' }]}
-                        >
+                {/* --- SELEKSI INVOICE (SEARCH BY NAME & INVOICE) --- */}
+                {isInvoicePayment && (
+                    <Card size="small" 
+                          title={<Space><ShoppingCartOutlined /> <Text strong>Daftar Invoice Belum Lunas</Text></Space>}
+                          extra={<Button type="link" size="small" onClick={selectAllInvoices} icon={<CheckSquareOutlined />}>Pilih Semua</Button>}
+                          style={{ borderRadius: '12px', marginBottom: '16px', border: '1px solid #d6e4ff', background: '#f0f5ff' }}>
+                        
+                        <Form.Item name="idTransaksi" style={{ marginBottom: '8px' }}>
                             <Select
-                                showSearch
-                                placeholder="🔍 Cari Invoice ID atau Nama Pelanggan..."
+                                mode="multiple"
+                                showSearch // Mengaktifkan fitur pencarian
+                                placeholder="🔍 Cari Nama Pelanggan atau Nomor Invoice..."
                                 loading={loadingInvoices}
-                                onSelect={handleTxnSelect}
-                                disabled={!!initialValues?.idTransaksi}
+                                onChange={handleTxnChange}
+                                optionLabelProp="label"
                                 listHeight={300}
-                                // --- PERBAIKAN UTAMA DI SINI ---
-                                // Gunakan 'label' agar tampilan saat dipilih beda dengan saat di list
-                                optionLabelProp="label" 
+                                style={{ width: '100%' }}
+                                dropdownStyle={{ borderRadius: '10px' }}
+                                // LOGIKA PENCARIAN CUSTOM
                                 filterOption={(input, option) => {
-                                    const rawText = option['data-label'] || '';
-                                    return rawText.toLowerCase().includes(input.toLowerCase());
+                                    // Mengambil string pencarian dari prop 'data-search' yang kita buat di bawah
+                                    const searchString = option['data-search']?.toLowerCase() || '';
+                                    return searchString.includes(input.toLowerCase());
                                 }}
-                                notFoundContent={loadingInvoices ? <Spin size="small" /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Tidak ada tagihan" />}
                             >
-                                {payableInvoices.map(tx => {
-                                    const sisaTagihan = tx.totalTagihan - tx.jumlahTerbayar;
-                                    const labelSearch = `${tx.namaPelanggan} ${tx.nomorInvoice}`;
-                                    
-                                    return (
-                                        <Option 
-                                            key={tx.id} 
-                                            value={tx.id} 
-                                            data-label={labelSearch}
-                                            // --- TAMPILAN SAAT DIPILIH (CLEAN) ---
-                                            label={
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                                    <span>
-                                                        <UserOutlined style={{ marginRight: 8 }} />
-                                                        <Text strong>{tx.namaPelanggan}</Text> 
-                                                        <Tag color="blue" style={{ marginLeft: 8 }}>{tx.nomorInvoice}</Tag>
-                                                    </span>
-                                                    {/* <Text type="danger" style={{ fontSize: 12 }}>
-                                                        Sisa: {currencyFormatter(sisaTagihan)}
-                                                    </Text> */}
-                                                </div>
-                                            }
-                                        >
-                                            {/* --- TAMPILAN SAAT DI LIST (RICH/DETAIL SEPERTI GAMBAR) --- */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                <Text strong><UserOutlined /> {tx.namaPelanggan}</Text>
+                                {payableInvoices.map(tx => (
+                                    <Option 
+                                        key={tx.id} 
+                                        value={tx.id} 
+                                        label={tx.nomorInvoice}
+                                        // Custom attribute untuk mempermudah filter pencarian
+                                        data-search={`${tx.namaPelanggan} ${tx.nomorInvoice}`}
+                                    >
+                                        <div style={{ padding: '4px 0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <Text strong><UserOutlined style={{ marginRight: 6 }} /> {tx.namaPelanggan}</Text>
                                                 <Tag color="blue">{tx.nomorInvoice}</Tag>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <Text type="secondary" style={{ fontSize: '11px', maxWidth: '250px' }} ellipsis>
-                                                    {tx.keterangan || 'Tidak ada keterangan'}
-                                                </Text>
-                                                <Text type="danger" strong style={{ fontSize: '13px' }}>
-                                                    Sisa: {currencyFormatter(sisaTagihan)}
-                                                </Text>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                                                <Text type="secondary" style={{ fontSize: '11px' }}>Sisa:</Text>
+                                                <Text type="danger" strong>{currencyFormatter(tx.totalTagihan - (tx.jumlahTerbayar || 0))}</Text>
                                             </div>
-                                            <Divider style={{ margin: '6px 0 0 0' }} dashed />
-                                        </Option>
-                                    );
-                                })}
+                                            <Divider style={{ margin: '8px 0 0 0' }} dashed />
+                                        </div>
+                                    </Option>
+                                ))}
                             </Select>
                         </Form.Item>
 
-                        {/* ... kode selanjutnya ... */}
-
-                        <Form.Item name="tipeTransaksi" hidden><Input /></Form.Item>
-
-                        {selectedTxnDetails && (
-                            // --- UI 4: Kartu Detail yang lebih rapi ---
-                            <Card 
-                                size="small" 
-                                style={{ marginBottom: 20, background: '#fafafa', borderColor: '#d9d9d9', borderRadius: 8 }} 
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <Text type="secondary">Nomor Invoice</Text>
-                                    <Text strong copyable>{selectedTxnDetails.nomorInvoice}</Text>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <Text type="secondary">Pelanggan</Text>
-                                    <Text strong>{selectedTxnDetails.namaPelanggan}</Text>
-                                </div>
-                                <Divider style={{ margin: '8px 0' }} />
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Text>Total Tagihan</Text>
-                                    <Text>{currencyFormatter(selectedTxnDetails.totalTagihan)}</Text>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Text>Sudah Dibayar</Text>
-                                    <Text>{currencyFormatter(selectedTxnDetails.jumlahTerbayar)}</Text>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                                    <Text strong type="danger">Sisa Tagihan</Text>
-                                    <Title level={5} type="danger" style={{ margin: 0 }}>
-                                        {currencyFormatter(selectedTxnDetails.totalTagihan - selectedTxnDetails.jumlahTerbayar)}
-                                    </Title>
-                                </div>
-                            </Card>
-                        )}
-
-                        <Form.Item name="keterangan" label="Keterangan">
-                            <Input.TextArea rows={2} placeholder="Keterangan otomatis..." variant="filled" />
-                        </Form.Item>
-                    </>
-                ) : (
-                    <Form.Item name="keterangan" label="Keterangan" rules={[{ required: true, message: 'Wajib diisi!' }]}>
-                        <Input.TextArea rows={2} placeholder="Cth: Beli Kertas A4" showCount maxLength={100} />
-                    </Form.Item>
-                )}
-
-                <Form.Item
-                    name="jumlah"
-                    label={isInvoicePayment ? "Jumlah Bayar" : "Nominal"}
-                    rules={[
-                        { required: true, message: 'Wajib diisi!' },
-                        { type: 'number', min: 1, message: 'Minimal 1' },
-                        () => ({
-                            validator(_, value) {
-                                if (!isInvoicePayment || !selectedTxnDetails || !value) return Promise.resolve();
-                                const sisa = selectedTxnDetails.totalTagihan - selectedTxnDetails.jumlahTerbayar;
-                                if (value > sisa) return Promise.reject(new Error(`Max: ${currencyFormatter(sisa)}`));
-                                return Promise.resolve();
-                            },
-                        }),
-                    ]}
-                >
-                    <InputNumber
-                        style={{ width: '100%' }}
-                        size="large"
-                        addonBefore="Rp"
-                        formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={(v) => v.replace(/[^\d]/g, '')}
-                        placeholder="0"
-                    />
-                </Form.Item>
-
-                <Form.Item label="Lampiran Bukti" name="bukti" valuePropName="fileList" getValueFromEvent={normFile}>
-                    <Upload 
-                        name="bukti" 
-                        customRequest={({ onSuccess }) => onSuccess("ok")} 
-                        maxCount={1} 
-                        fileList={fileList} 
-                        onChange={({ fileList: newFileList }) => setFileList(newFileList)} 
-                        accept="image/*,.pdf"
-                        listType="picture-card" // --- UI 5: Tampilan upload jadi card ---
-                    >
-                        {fileList.length < 1 && (
-                             <div style={{ marginTop: 8 }}>
-                                <FileTextOutlined style={{ fontSize: 24, color: '#999' }} />
-                                <div style={{ marginTop: 8, color: '#666' }}>Upload</div>
+                        {selectedInvoices.length > 0 && (
+                            <div style={{ background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #adc6ff' }}>
+                                <Row justify="space-between" align="middle">
+                                    <Col>
+                                        <Badge status="processing" text={`${selectedInvoices.length} Tagihan dipilih`} />
+                                    </Col>
+                                    <Col>
+                                        <Text type="secondary" style={{ fontSize: '12px' }}>Total Pelunasan: </Text>
+                                        <Text strong style={{ fontSize: '15px', color: '#52c41a' }}>{currencyFormatter(totalSisaSelected)}</Text>
+                                    </Col>
+                                </Row>
                             </div>
                         )}
-                    </Upload>
-                </Form.Item>
+                    </Card>
+                )}
+
+                {/* --- NOMINAL & BUKTI --- */}
+                <Card size="small" style={{ borderRadius: '12px', border: '1px solid #f0f0f0' }}>
+                    <Form.Item name="jumlah" label={<Text strong>Nominal Transaksi</Text>} rules={[{ required: true }]}>
+                        <InputNumber
+                            prefix={<DollarOutlined style={{ color: '#bfbfbf' }} />}
+                            style={{ width: '100%', borderRadius: '6px' }}
+                            size="large"
+                            placeholder="0"
+                            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                            parser={(v) => v.replace(/[^\d]/g, '')}
+                        />
+                    </Form.Item>
+
+                    <Form.Item name="keterangan" label={<Text strong>Catatan</Text>}>
+                        <Input.TextArea rows={2} placeholder="Keterangan transaksi..." style={{ borderRadius: '6px' }} />
+                    </Form.Item>
+
+                    <Form.Item label={<Text strong>Bukti Pembayaran</Text>} name="bukti" 
+                               valuePropName="fileList" getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}>
+                        <Upload listType="picture-card" maxCount={1} customRequest={({ onSuccess }) => onSuccess("ok")}>
+                            {fileList.length < 1 && (
+                                <div style={{ color: '#8c8c8c' }}>
+                                    <PlusOutlined style={{ fontSize: '18px' }} />
+                                    <div style={{ marginTop: 6 }}>Upload</div>
+                                </div>
+                            )}
+                        </Upload>
+                    </Form.Item>
+                </Card>
             </Form>
         </Modal>
     );
