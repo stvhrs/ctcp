@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import {
     Layout, Card, Table, Tag, Button, Modal, Input, Space, Typography, Row, Col,
-    message, Tooltip, Empty, Grid, DatePicker, Spin, Divider
+    message, Tooltip, Empty, Grid, DatePicker, Spin, Divider, Statistic // <-- Tambahkan Statistic di sini
 } from 'antd';
 import {
     PlusOutlined, EditOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, ShareAltOutlined
@@ -10,18 +10,17 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/id';
 import {
     currencyFormatter, numberFormatter, percentFormatter, generateFilters
-} from '../../utils/formatters'; // Pastikan path ini benar
-import { useMutasiData, useUnpaidInvoicesData } from './listendata'; // Pastikan path ini benar
-import useDebounce from '../../hooks/useDebounce'; // Pastikan path ini benar
+} from '../../utils/formatters'; 
+import { useMutasiData, useUnpaidInvoicesData } from './listendata'; 
+import useDebounce from '../../hooks/useDebounce'; 
 
-import { generateMutasiPdf } from '../../utils/pdfMutas'; // Pastikan path ini benar
+import { generateMutasiPdf } from '../../utils/pdfMutas'; 
 
-import RekapitulasiCard from './components/RekapitulasiCard'; // Pastikan path ini benar
-import KategoriChips from './components/KategoriChips'; // Pastikan path ini benar
+import RekapitulasiCard from './components/RekapitulasiCard'; 
+import KategoriChips from './components/KategoriChips'; 
 
-// Impor komponen-komponen baru
-import TransaksiForm from './components/TransaksiForm'; // Pastikan path ini benar
-import PdfPreviewModal from '../BukuPage/components/PdfPreviewModal'; // Sesuaikan path
+import TransaksiForm from './components/TransaksiForm'; 
+import PdfPreviewModal from '../BukuPage/components/PdfPreviewModal'; 
 
 dayjs.locale('id');
 
@@ -34,18 +33,14 @@ export const KategoriPemasukan = {
     penjualan_plate: "Penjualan Plate",
     penjualan_sisa_palte: "Penjualan Sisa Plate",
     pemasukan_lain: "Pemasukan Lain-lain",
-
 };
 
 export const KategoriPengeluaran = {
-
     gum: "Gum",
     plate: "Plate",
     developer: 'Developer',
-
     gaji_produksi: "Gaji Karyawan",
     operasional: "Operasional",
-
     pengeluaran_lain: "Pengeluaran Lain-lain",
 };
 
@@ -268,23 +263,49 @@ const MutasiPage = () => {
         const dataToProses = filteredTransaksi;
 
         if (!dataToProses || dataToProses.length === 0) {
-            return { pemasukanEntries: [], pengeluaranEntries: [], totalPemasukan: 0, totalPengeluaran: 0, saldoAkhirFilter: 0 };
+            return { pemasukanEntries: [], pengeluaranEntries: [], totalPemasukan: 0, totalPemasukanTunai: 0, totalPemasukanTransfer: 0, totalPengeluaran: 0, saldoAkhirFilter: 0 };
         }
-        let totalPemasukan = 0; let totalPengeluaran = 0;
-        const pemasukanMap = new Map(); const pengeluaranMap = new Map();
+        
+        let totalPemasukan = 0; 
+        let totalPemasukanTunai = 0; // State kalkulasi tunai
+        let totalPemasukanTransfer = 0; // State kalkulasi transfer
+        let totalPengeluaran = 0;
+        
+        const pemasukanMap = new Map(); 
+        const pengeluaranMap = new Map();
+        
         for (const tx of dataToProses) {
             const kategoriNama = tx.tipe === 'pemasukan' ? KategoriPemasukan[tx.kategori] || tx.kategori?.replace(/_/g, ' ') || 'Pemasukan Lain' : KategoriPengeluaran[tx.kategori] || tx.kategori?.replace(/_/g, ' ') || 'Pengeluaran Lain';
-            if (tx.tipe === 'pemasukan' && tx.jumlah > 0) { totalPemasukan += tx.jumlah; pemasukanMap.set(kategoriNama, (pemasukanMap.get(kategoriNama) || 0) + tx.jumlah); }
-            else if (tx.tipe === 'pengeluaran' && tx.jumlah < 0) { const positiveAmount = Math.abs(tx.jumlah); totalPengeluaran += positiveAmount; pengeluaranMap.set(kategoriNama, (pengeluaranMap.get(kategoriNama) || 0) + positiveAmount); }
+            
+            if (tx.tipe === 'pemasukan' && tx.jumlah > 0) { 
+                totalPemasukan += tx.jumlah; 
+                pemasukanMap.set(kategoriNama, (pemasukanMap.get(kategoriNama) || 0) + tx.jumlah); 
+                
+                // --- MENGHITUNG BERDASARKAN METODE ---
+                if (tx.metode === 'Tunai') {
+                    totalPemasukanTunai += tx.jumlah;
+                } else if (tx.metode === 'Transfer') {
+                    totalPemasukanTransfer += tx.jumlah;
+                }
+
+            } else if (tx.tipe === 'pengeluaran' && tx.jumlah < 0) { 
+                const positiveAmount = Math.abs(tx.jumlah); 
+                totalPengeluaran += positiveAmount; 
+                pengeluaranMap.set(kategoriNama, (pengeluaranMap.get(kategoriNama) || 0) + positiveAmount); 
+            }
         }
         const pemasukanEntries = Array.from(pemasukanMap.entries()).sort((a, b) => b[1] - a[1]);
         const pengeluaranEntries = Array.from(pengeluaranMap.entries()).sort((a, b) => b[1] - a[1]);
 
-        // Urutkan dulu filteredTransaksi berdasarkan tanggal descending
         const sortedFiltered = [...dataToProses].sort((a, b) => getTimestamp(b) - getTimestamp(a));
         const saldoAkhirFilter = sortedFiltered.length > 0 ? sortedFiltered[0].saldoSetelah : 0;
 
-        return { pemasukanEntries, pengeluaranEntries, totalPemasukan, totalPengeluaran, saldoAkhirFilter };
+        // Me-return juga variabel kalkulasi tunai/transfer
+        return { 
+            pemasukanEntries, pengeluaranEntries, 
+            totalPemasukan, totalPemasukanTunai, totalPemasukanTransfer, 
+            totalPengeluaran, saldoAkhirFilter 
+        };
 
     }, [filteredTransaksi, getTimestamp]);
 
@@ -306,7 +327,7 @@ const MutasiPage = () => {
                 title: 'Tanggal', 
                 dataIndex: 'tanggal', 
                 key: 'tanggal', 
-                align: 'center', // Rapi untuk tanggal
+                align: 'center', 
                 width: 120, 
                 render: (tgl, record) => dayjs(getTimestamp(record)).format('DD MMM YYYY'), 
                 sorter: (a, b) => getTimestamp(a) - getTimestamp(b), 
@@ -316,7 +337,7 @@ const MutasiPage = () => {
                 title: 'Jenis Transaksi', 
                 dataIndex: 'kategori', 
                 key: 'kategori', 
-                width: 170, // Ukuran pas untuk Tag
+                width: 170, 
                 render: (kategori, record) => { 
                     const katText = record.tipe === 'pemasukan' ? KategoriPemasukan[kategori] || kategori?.replace(/_/g, ' ') : KategoriPengeluaran[kategori] || kategori?.replace(/_/g, ' '); 
                     return <Tag color={record.tipe === 'pemasukan' ? 'green' : 'red'}>{katText || record.tipeMutasi}</Tag>; 
@@ -327,22 +348,21 @@ const MutasiPage = () => {
                 dataIndex: 'nama', 
                 key: 'nama', 
                 width: 160,
-                ellipsis: true // Agar tidak memanjang ke bawah jika nama panjang
+                ellipsis: true 
             },
             { 
                 title: 'Keterangan', 
                 dataIndex: 'keterangan', 
                 key: 'keterangan', 
-                // Tidak ada width fix, dia akan mengisi sisa ruang (flexible)
                 ellipsis: true 
             },
             { 
                 title: 'Metode', 
                 dataIndex: 'metode', 
                 key: 'metode', 
-                align: 'center', // Tunai/Transfer lebih bagus di tengah
+                align: 'center', 
                 width: 100,
-                render: (text) => <Tag color={text === 'Tunai' ? 'cyan' : 'blue'}>{text}</Tag> // Opsional: pakai Tag biar cantik
+                render: (text) => <Tag color={text === 'Tunai' ? 'cyan' : 'blue'}>{text}</Tag>
             },
             { 
                 title: 'Nominal', 
@@ -367,7 +387,7 @@ const MutasiPage = () => {
                 key: 'aksi', 
                 align: 'center', 
                 width: 100, 
-                fixed: 'right', // Agar tombol tetap terlihat saat scroll horizontal
+                fixed: 'right', 
                 render: (_, record) => (
                     <Space size="small"> 
                         <Tooltip title={record.buktiUrl ? "Lihat Bukti" : "Tidak ada bukti"}>
@@ -381,11 +401,11 @@ const MutasiPage = () => {
             },
         ];
 
-        // Filter kolom saldo jika layar kecil (Mobile)
         if (!screens.md) return baseColumns.filter(col => col.key !== 'saldoSetelah');
         
         return baseColumns;
     }, [screens, handleEdit, getTimestamp, handleViewProof]);
+
     return (
         <Content style={{ padding: screens.xs ? '12px' : '24px', backgroundColor: '#f0f2f5' }}>
 
@@ -435,11 +455,37 @@ const MutasiPage = () => {
 
                 {/* Rekapitulasi Card */}
                 <Col xs={24} lg={10}>
-                    <RekapitulasiCard
-                        rekapData={rekapDataForCard}
-                        isFilterActive={isFilterActive}
-                        loading={initialLoading || isFiltering}
-                    />
+                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                        
+                        {/* --- BAGIAN BARU: Rincian Metode Pemasukan --- */}
+                        <Card bodyStyle={{ padding: '16px 24px' }}>
+                            <Row gutter={16}>
+                                <Col span={12}>
+                                    <Statistic 
+                                        title="Pemasukan Tunai" 
+                                        value={rekapDataForCard.totalPemasukanTunai} 
+                                        formatter={(val) => currencyFormatter(val)} 
+                                        valueStyle={{ color: '#3f8600', fontSize: screens.xs ? '1rem' : '1.25rem' }} 
+                                    />
+                                </Col>
+                                <Col span={12}>
+                                    <Statistic 
+                                        title="Pemasukan Transfer" 
+                                        value={rekapDataForCard.totalPemasukanTransfer} 
+                                        formatter={(val) => currencyFormatter(val)} 
+                                        valueStyle={{ color: '#1890ff', fontSize: screens.xs ? '1rem' : '1.25rem' }} 
+                                    />
+                                </Col>
+                            </Row>
+                        </Card>
+                        {/* --------------------------------------------- */}
+
+                        <RekapitulasiCard
+                            rekapData={rekapDataForCard}
+                            isFilterActive={isFilterActive}
+                            loading={initialLoading || isFiltering}
+                        />
+                    </Space>
                 </Col>
             </Row>
 
@@ -472,10 +518,6 @@ const MutasiPage = () => {
                 />
             </Card>
 
-
-            {/************************************
-             * PERBAIKAN ADA DI SINI      *
-             ************************************/}
             {isModalOpen && (
                 <TransaksiForm
                     open={isModalOpen}
@@ -486,10 +528,6 @@ const MutasiPage = () => {
                     loadingInvoices={loadingInvoices}
                 />
             )}
-            {/************************************
-             * AKHIR BAGIAN PERBAIKAN      *
-             ************************************/}
-
 
             {/* Modal PDF Preview */}
             <PdfPreviewModal visible={isPreviewModalVisible} onClose={handleClosePreviewModal} pdfBlobUrl={pdfPreviewUrl} fileName={pdfFileName} />

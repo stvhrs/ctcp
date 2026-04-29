@@ -1,10 +1,5 @@
 // ================================
 // FILE: src/pages/transaksi-jual/TransaksiJualPage.jsx
-// MODIFIKASI:
-// 1. Mengganti @react-pdf-viewer dengan <iframe /> native browser.
-// 2. Memastikan fitur Cetak (Print) bawaan browser bisa digunakan langsung.
-// 3. Menambahkan kolom 'jumlahTerbayar'.
-// 4. Menambahkan fitur Sortir dan Filter pada header kolom.
 // ================================
 
 import React, { useEffect, useState, useMemo, useCallback, useDeferredValue } from 'react';
@@ -19,7 +14,7 @@ import {
 import dayjs from 'dayjs';
 import 'dayjs/locale/id';
 
-// Impor PDF Generator Library
+// Impor PDF Generator Library (Hanya untuk Laporan)
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -28,11 +23,14 @@ import useDebounce from '../../hooks/useDebounce';
 import TransaksiJualForm from './components/TransaksiJualForm'; 
 import TransaksiJualDetailModal from './components/TransaksiJualDetailModal'; 
 import TransaksiJualTableComponent from './components/TransaksiJualTableComponent'; 
-import { generateNotaPDF } from '../../utils/pdfGenerator'; 
+import TagihanPelangganTab from './components/TagihanPelangganTab'; 
+
+// Import Modal Preview HTML dan Generator Nota
+import RawTextPreviewModal from '../../components/RawTextPreviewModal'; // SESUAIKAN PATH INI
+import { generateNotaHTML } from '../../utils/pdfGenerator'; // SESUAIKAN PATH INI
 
 // Hooks Data
 import { useTransaksiJualData, useBukuData, usePelangganData } from '../../hooks/useTransaksiData'; 
-import TagihanPelangganTab from './components/TagihanPelangganTab'; 
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -84,7 +82,13 @@ export default function TransaksiJualPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedTransaksi, setSelectedTransaksi] = useState(null);
 
-    // --- State PDF Modal ---
+    // --- State HTML Preview Modal (Untuk Nota) ---
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [previewContent, setPreviewContent] = useState('');
+    const [previewTitle, setPreviewTitle] = useState('Preview Nota');
+    const [loadingPreview, setLoadingPreview] = useState(false);
+
+    // --- State PDF Modal (Untuk Laporan) ---
     const [isTxPdfModalOpen, setIsTxPdfModalOpen] = useState(false);
     const [txPdfBlob, setTxPdfBlob] = useState(null);
     const [txPdfTitle, setTxPdfTitle] = useState('');
@@ -104,7 +108,7 @@ export default function TransaksiJualPage() {
 
     // --- Filter Data Logic (Global Filter) ---
     const filteredTransaksi = useMemo(() => {
-        let data = [...deferredAllTransaksi]; 
+        let data = [...(deferredAllTransaksi || [])]; 
 
         if (deferredDateRange) {
             const [startDate, endDate] = deferredDateRange;
@@ -143,8 +147,7 @@ export default function TransaksiJualPage() {
 
     // --- Kalkulasi Rekap ---
     const recapData = useMemo(() => {
-        const dataToRecap = filteredTransaksi;
-        const totals = dataToRecap.reduce(
+        const totals = filteredTransaksi.reduce(
             (acc, tx) => ({
                 tagihan: acc.tagihan + Number(tx.totalTagihan || 0),
                 terbayar: acc.terbayar + Number(tx.jumlahTerbayar || 0)
@@ -159,17 +162,15 @@ export default function TransaksiJualPage() {
         };
     }, [filteredTransaksi, isFilterActive]);
 
+
     // --- Handlers UI ---
     const handleSearchChange = useCallback((e) => { setSearchText(e.target.value); setPagination(prev => ({ ...prev, current: 1 })); }, []);
     const handleDateChange = useCallback((dates) => { setDateRange(dates); setPagination(prev => ({ ...prev, current: 1 })); }, []);
     const handleStatusToggle = useCallback((status) => { setSelectedStatus(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]); setPagination(prev => ({ ...prev, current: 1 })); }, []);
     const resetFilters = useCallback(() => { setSearchText(''); setSelectedStatus([]); setDateRange(null); setPagination(prev => ({ ...prev, current: 1 })); }, []);
-    const handleTableChange = useCallback((paginationConfig, filters, sorter) => { 
-        setPagination(paginationConfig); 
-        // Logic tambahan jika ingin handle server-side filtering/sorting bisa disini
-    }, []);
+    const handleTableChange = useCallback((paginationConfig) => { setPagination(paginationConfig); }, []);
 
-    // --- Handlers Modals ---
+    // --- Handlers Modals Form & Detail ---
     const handleOpenCreate = useCallback(() => { setFormMode('create'); setEditingTx(null); setIsFormModalOpen(true); }, []);
     const handleOpenEdit = useCallback((tx) => { setFormMode('edit'); setEditingTx(tx); setIsFormModalOpen(true); }, []);
     const handleCloseFormModal = useCallback(() => { setIsFormModalOpen(false); setEditingTx(null); }, []);
@@ -177,7 +178,54 @@ export default function TransaksiJualPage() {
     const handleOpenDetailModal = useCallback((tx) => { setSelectedTransaksi(tx); setIsDetailModalOpen(true); }, []);
     const handleCloseDetailModal = useCallback(() => { setSelectedTransaksi(null); setIsDetailModalOpen(false); }, []);
 
-    // --- Handlers PDF ---
+    // --- Handlers HTML Print (NOTA) ---
+    const handleGenerateNota = useCallback((tx) => {
+        const baseId = tx.nomorInvoice || tx.id || '';
+        const fileName = baseId.replace(/^INV-/i, 'NT-'); 
+
+        setPreviewTitle(`Nota: ${fileName}`);
+        setLoadingPreview(true);
+        setIsPreviewOpen(true);
+
+        try {
+            const htmlString = generateNotaHTML(tx);
+            setPreviewContent(htmlString);
+        } catch (err) {
+            console.error("Gagal generate nota HTML:", err);
+            message.error('Gagal membuat Preview nota.');
+            setIsPreviewOpen(false);
+        } finally {
+            setLoadingPreview(false);
+        }
+    }, [message]);
+
+    const handlePrintFromPreview = useCallback(() => {
+        if (!previewContent) return;
+
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>${previewTitle}</title>
+                    <style>
+                        @page { size: A5 landscape; margin: 10mm; }
+                        body { margin: 0; -webkit-print-color-adjust: exact; }
+                    </style>
+                </head>
+                <body>${previewContent}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    }, [previewContent, previewTitle]);
+
+
+    // --- Handlers PDF (LAPORAN BULANAN / FILTER) ---
     const handleCloseTxPdfModal = useCallback(() => { 
         setIsTxPdfModalOpen(false); 
         setIsTxPdfGenerating(false); 
@@ -189,33 +237,6 @@ export default function TransaksiJualPage() {
         }
     }, [pdfPreviewUrl]);
     
-    // 1. Generate NOTA
-    const handleGenerateNota = useCallback(async (tx) => {
-        const baseId = tx.nomorInvoice || tx.id;
-        const fileName = baseId.replace(/^INV-/i, 'NT-'); 
-        setTxPdfTitle(`Nota: ${baseId}`);
-        setTxPdfFileName(fileName);
-        setIsTxPdfGenerating(true);
-        setIsTxPdfModalOpen(true);
-        setTxPdfBlob(null);
-        setPdfPreviewUrl(null);
-
-        try {
-            const dataUri = generateNotaPDF(tx);
-            const blob = await fetch(dataUri).then(r => r.blob());
-            setTxPdfBlob(blob);
-            const url = URL.createObjectURL(blob);
-            setPdfPreviewUrl(url);
-        } catch (err) {
-            console.error("Gagal generate nota PDF:", err);
-            message.error('Gagal membuat PDF nota.');
-            setIsTxPdfModalOpen(false);
-        } finally {
-            setIsTxPdfGenerating(false);
-        }
-    }, [message]);
-
-    // 2. Download & Share Handler
     const handleDownloadTxPdf = useCallback(async () => {
         if (!txPdfBlob) return;
         message.loading({ content: 'Mengunduh...', key: 'pdfdl_tx', duration: 0 });
@@ -247,7 +268,6 @@ export default function TransaksiJualPage() {
         } else { message.warn('Berbagi file PDF tidak didukung.'); }
     }, [txPdfBlob, txPdfTitle, txPdfFileName, message]);
 
-    // 3. Generate Laporan Bulanan (Filter)
     const handleGenerateReportPdf = useCallback(async () => {
         if (filteredTransaksi.length === 0) {
             message.warning('Tidak ada data transaksi untuk dicetak pada filter ini.');
@@ -267,9 +287,16 @@ export default function TransaksiJualPage() {
             try {
                 const doc = new jsPDF();
                 let startY = 36; doc.setFontSize(18); doc.text(title, 14, 22); doc.setFontSize(10);
-                const filterInfo = []; if (deferredDateRange) filterInfo.push(`Tgl: ${deferredDateRange[0].format('DD/MM/YY')} - ${deferredDateRange[1].format('DD/MM/YY')}`); if (deferredSelectedStatus.length > 0) filterInfo.push(`Status: ${deferredSelectedStatus.join(', ')}`); if (deferredDebouncedSearch) filterInfo.push(`Cari: "${deferredDebouncedSearch}"`);
-                if (filterInfo.length > 0) doc.text(`Filter Aktif: ${filterInfo.join(' | ')}`, 14, 28); else { doc.text('Filter Aktif: Menampilkan Semua', 14, 28); }
+                const filterInfo = []; 
+                if (deferredDateRange) filterInfo.push(`Tgl: ${deferredDateRange[0].format('DD/MM/YY')} - ${deferredDateRange[1].format('DD/MM/YY')}`); 
+                if (deferredSelectedStatus.length > 0) filterInfo.push(`Status: ${deferredSelectedStatus.join(', ')}`); 
+                if (deferredDebouncedSearch) filterInfo.push(`Cari: "${deferredDebouncedSearch}"`);
+                
+                if (filterInfo.length > 0) doc.text(`Filter Aktif: ${filterInfo.join(' | ')}`, 14, 28); 
+                else { doc.text('Filter Aktif: Menampilkan Semua', 14, 28); }
+                
                 autoTable(doc, { startY: startY, body: [['Total Tagihan', formatCurrency(recapData.totalTagihan)], ['Total Terbayar', formatCurrency(recapData.totalTerbayar)], ['Total Sisa Tagihan', formatCurrency(recapData.sisaTagihan)]], theme: 'grid', styles: { fontSize: 10, cellPadding: 2 }, columnStyles: { 0: { fontStyle: 'bold', halign: 'right' }, 1: { halign: 'right' } }, didDrawCell: (data) => { if (data.section === 'body') { if (data.row.index === 1) data.cell.styles.textColor = [40, 167, 69]; if (data.row.index === 2) data.cell.styles.textColor = [220, 53, 69]; } } });
+                
                 const tableHead = ['Tanggal', 'ID Transaksi', 'Pelanggan', 'Total Tagihan', 'Terbayar', 'Sisa Tagihan', 'Status']; 
                 const tableBody = filteredTransaksi.map(tx => { 
                     const sisa = (tx.totalTagihan || 0) - (tx.jumlahTerbayar || 0); 
@@ -278,7 +305,7 @@ export default function TransaksiJualPage() {
                         tx.nomorInvoice || tx.id, 
                         tx.namaPelanggan || '-', 
                         formatCurrency(tx.totalTagihan), 
-                        formatCurrency(tx.jumlahTerbayar), // Add Terbayar to PDF
+                        formatCurrency(tx.jumlahTerbayar), 
                         formatCurrency(sisa), 
                         normalizeStatus(tx.statusPembayaran)
                     ]; 
@@ -298,26 +325,14 @@ export default function TransaksiJualPage() {
     }, [filteredTransaksi, recapData, deferredDateRange, deferredSelectedStatus, deferredDebouncedSearch, message]);
 
 
-    // --- Column Filter & Sort Helpers ---
-    // Mengambil value unik dari data untuk opsi filter
+    // --- Column Filter Helpers ---
     const uniqueFilters = useMemo(() => {
-        const getFilters = (key) => {
-            const values = filteredTransaksi.map(item => item[key]).filter(Boolean);
-            const unique = [...new Set(values)];
-            return unique.map(val => ({ text: val, value: val })).sort((a, b) => a.text.localeCompare(b.text));
-        };
         const getStatusFilters = () => {
             const values = filteredTransaksi.map(item => normalizeStatus(item.statusPembayaran)).filter(Boolean);
             const unique = [...new Set(values)];
             return unique.map(val => ({ text: val, value: val }));
         };
-
-        return {
-            pelanggan: getFilters('namaPelanggan'),
-            id: getFilters('nomorInvoice'), // Gunakan nomorInvoice jika ada, fallback ke ID handled di column
-            keterangan: getFilters('keterangan'),
-            status: getStatusFilters()
-        };
+        return { status: getStatusFilters() };
     }, [filteredTransaksi]);
 
 
@@ -339,100 +354,15 @@ export default function TransaksiJualPage() {
     }, [handleOpenDetailModal, handleOpenEdit, handleGenerateNota]);
 
     const columns = useMemo(() => [
-        { 
-            title: 'No.', 
-            key: 'index', 
-            width: 60, 
-            render: (_t, _r, idx) => ((pagination.current - 1) * pagination.pageSize) + idx + 1 
-        },
-        { 
-            title: 'Tanggal', 
-            dataIndex: 'tanggal', 
-            key: 'tanggal', 
-            width: 120, 
-            render: formatDate, 
-            sorter: (a, b) => (a.tanggal || 0) - (b.tanggal || 0) 
-        },
-        { 
-            title: 'ID Transaksi', 
-            dataIndex: 'nomorInvoice', // Prioritaskan Invoice
-            key: 'id', 
-            width: 180, 
-            render: (val, record) => <small>{val || record.id}</small>,
-            sorter: (a, b) => (a.nomorInvoice || a.id || '').localeCompare(b.nomorInvoice || b.id || ''),
-            // filters: uniqueFilters.id,
-            filterSearch: true,
-            onFilter: (value, record) => (record.nomorInvoice || record.id || '').includes(value)
-        },
-        { 
-            title: 'Pelanggan', 
-            dataIndex: 'namaPelanggan', 
-            key: 'namaPelanggan', 
-            width: 220, 
-            sorter: (a, b) => (a.namaPelanggan || '').localeCompare(b.namaPelanggan || ''), 
-            render: (val, record) => (<span>{val} {record.pelangganIsSpesial ? <Tag color="gold">Spesial</Tag> : null}</span>),
-            // filters: uniqueFilters.pelanggan,
-            filterSearch: true,
-            onFilter: (value, record) => (record.namaPelanggan || '').includes(value)
-        },
-        { 
-            title: 'Keterangan', 
-            dataIndex: 'keterangan', 
-            key: 'keterangan', 
-            ellipsis: true, 
-            render: (v) => v || '-',
-            sorter: (a, b) => (a.keterangan || '').localeCompare(b.keterangan || ''),
-            // filters: uniqueFilters.keterangan,
-            filterSearch: true,
-            onFilter: (value, record) => (record.keterangan || '').includes(value)
-        },
-        { 
-            title: 'Total Tagihan', 
-            dataIndex: 'totalTagihan', 
-            key: 'totalTagihan', 
-            align: 'right', 
-            width: 150, 
-            render: formatCurrency, 
-            sorter: (a, b) => (a.totalTagihan || 0) - (b.totalTagihan || 0) 
-        },
-        // --- ADDED: Kolom Jumlah Terbayar ---
-        { 
-            title: 'Terbayar', 
-            dataIndex: 'jumlahTerbayar', 
-            key: 'jumlahTerbayar', 
-            align: 'right', 
-            width: 150, 
-            render: (val) => <span style={{ color: '#3f8600' }}>{formatCurrency(val)}</span>, 
-            sorter: (a, b) => (a.jumlahTerbayar || 0) - (b.jumlahTerbayar || 0) 
-        },
-        { 
-            title: 'Sisa Tagihan', 
-            key: 'sisaTagihan', 
-            align: 'right', 
-            width: 150, 
-            render: (_, r) => { 
-                const sisa = (r.totalTagihan || 0) - (r.jumlahTerbayar || 0); 
-                return <span style={{ color: sisa > 0 ? '#cf1322' : '#3f8600', fontWeight: 600 }}>{formatCurrency(sisa)}</span>; 
-            }, 
-            sorter: (a, b) => ((a.totalTagihan || 0) - (a.jumlahTerbayar || 0)) - ((b.totalTagihan || 0) - (b.jumlahTerbayar || 0)) 
-        },
-        { 
-            title: 'Status', 
-            dataIndex: 'statusPembayaran', 
-            key: 'statusPembayaran', 
-            width: 130, 
-            render: (statusRaw) => { 
-                const status = normalizeStatus(statusRaw); 
-                let color = 'default'; 
-                if (status === 'Lunas') color = 'green'; 
-                else if (status === 'Belum Bayar') color = 'red'; 
-                else if (status === 'Sebagian') color = 'orange'; 
-                return <Tag color={color}>{status}</Tag>; 
-            },
-            sorter: (a, b) => (normalizeStatus(a.statusPembayaran)).localeCompare(normalizeStatus(b.statusPembayaran)),
-            filters: uniqueFilters.status,
-            onFilter: (value, record) => normalizeStatus(record.statusPembayaran) === value
-        },
+        { title: 'No.', key: 'index', width: 60, render: (_t, _r, idx) => ((pagination.current - 1) * pagination.pageSize) + idx + 1 },
+        { title: 'Tanggal', dataIndex: 'tanggal', key: 'tanggal', width: 120, render: formatDate, sorter: (a, b) => (a.tanggal || 0) - (b.tanggal || 0) },
+        { title: 'ID Transaksi', dataIndex: 'nomorInvoice', key: 'id', width: 180, render: (val, record) => <small>{val || record.id}</small>, sorter: (a, b) => (a.nomorInvoice || a.id || '').localeCompare(b.nomorInvoice || b.id || ''), filterSearch: true, onFilter: (value, record) => (record.nomorInvoice || record.id || '').includes(value) },
+        { title: 'Pelanggan', dataIndex: 'namaPelanggan', key: 'namaPelanggan', width: 220, sorter: (a, b) => (a.namaPelanggan || '').localeCompare(b.namaPelanggan || ''), render: (val, record) => (<span>{val} {record.pelangganIsSpesial ? <Tag color="gold">Spesial</Tag> : null}</span>), filterSearch: true, onFilter: (value, record) => (record.namaPelanggan || '').includes(value) },
+        { title: 'Keterangan', dataIndex: 'keterangan', key: 'keterangan', ellipsis: true, render: (v) => v || '-', sorter: (a, b) => (a.keterangan || '').localeCompare(b.keterangan || ''), filterSearch: true, onFilter: (value, record) => (record.keterangan || '').includes(value) },
+        { title: 'Total Tagihan', dataIndex: 'totalTagihan', key: 'totalTagihan', align: 'right', width: 150, render: formatCurrency, sorter: (a, b) => (a.totalTagihan || 0) - (b.totalTagihan || 0) },
+        { title: 'Terbayar', dataIndex: 'jumlahTerbayar', key: 'jumlahTerbayar', align: 'right', width: 150, render: (val) => <span style={{ color: '#3f8600' }}>{formatCurrency(val)}</span>, sorter: (a, b) => (a.jumlahTerbayar || 0) - (b.jumlahTerbayar || 0) },
+        { title: 'Sisa Tagihan', key: 'sisaTagihan', align: 'right', width: 150, render: (_, r) => { const sisa = (r.totalTagihan || 0) - (r.jumlahTerbayar || 0); return <span style={{ color: sisa > 0 ? '#cf1322' : '#3f8600', fontWeight: 600 }}>{formatCurrency(sisa)}</span>; }, sorter: (a, b) => ((a.totalTagihan || 0) - (a.jumlahTerbayar || 0)) - ((b.totalTagihan || 0) - (b.jumlahTerbayar || 0)) },
+        { title: 'Status', dataIndex: 'statusPembayaran', key: 'statusPembayaran', width: 130, render: (statusRaw) => { const status = normalizeStatus(statusRaw); let color = 'default'; if (status === 'Lunas') color = 'green'; else if (status === 'Belum Bayar') color = 'red'; else if (status === 'Sebagian') color = 'orange'; return <Tag color={color}>{status}</Tag>; }, sorter: (a, b) => (normalizeStatus(a.statusPembayaran)).localeCompare(normalizeStatus(b.statusPembayaran)), filters: uniqueFilters.status, onFilter: (value, record) => normalizeStatus(record.statusPembayaran) === value },
         { title: 'Aksi', key: 'aksi', align: 'center', width: 150, fixed: 'right', render: renderAksi },
     ], [pagination, renderAksi, uniqueFilters]);
 
@@ -443,7 +373,7 @@ export default function TransaksiJualPage() {
         <Layout>
              <Content style={{ padding: '24px', backgroundColor: '#f0f2f5' }}>
                  <Tabs defaultActiveKey="1" type="card">
-                     {/* TAB 1 */}
+                     {/* TAB 1: Daftar Transaksi */}
                      <TabPane tab={<Space><ReadOutlined /> Daftar Transaksi</Space>} key="1">
                          <Card style={{ marginBottom: 24 }}>
                             <Title level={4} style={{ margin: 0, marginBottom: 24 }}>Ringkasan Transaksi</Title>
@@ -459,7 +389,7 @@ export default function TransaksiJualPage() {
                                  <Col xs={24} sm={12}><Title level={5} style={{ margin: 0 }}>Daftar Transaksi</Title></Col>
                                  <Col xs={24} sm={12} style={{ textAlign: 'right' }}>
                                      <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
-                                         <Button icon={<PrinterOutlined />} onClick={handleGenerateReportPdf} disabled={isFiltering || filteredTransaksi.length === 0 || isTxPdfGenerating} loading={isTxPdfGenerating}> Cetak PDF (Filter) </Button>
+                                         <Button icon={<PrinterOutlined />} onClick={handleGenerateReportPdf} disabled={isFiltering || filteredTransaksi.length === 0 || isTxPdfGenerating} loading={isTxPdfGenerating}> Cetak PDF Laporan </Button>
                                          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate} disabled={loadingDependencies}> Tambah Transaksi </Button>
                                      </Space>
                                  </Col>
@@ -469,29 +399,62 @@ export default function TransaksiJualPage() {
                                  <Col xs={24} sm={12} md={12}><RangePicker value={dateRange} onChange={handleDateChange} style={{ width: '100%' }} placeholder={['Tgl Mulai', 'Tgl Selesai']} /></Col>
                              </Row>
                              <Row justify="start" style={{ marginBottom: 24 }}>
-                                 <Col><Space wrap>
+                                 <Col>
+                                    <Space wrap>
                                      {['Belum Bayar', 'Sebagian', 'Lunas'].map(status => (
                                          <Tag.CheckableTag key={status} style={chipStyle} checked={selectedStatus.includes(status)} onChange={() => handleStatusToggle(status)}>{status === 'Sebagian' ? 'DP (Sebagian)' : status}</Tag.CheckableTag>
                                      ))}
                                      {isFilterActive && ( <Button type="link" size="small" onClick={resetFilters}> Reset Filter </Button> )}
-                                 </Space></Col>
+                                    </Space>
+                                 </Col>
                              </Row>
                              <Spin spinning={isFiltering} tip="Memfilter data...">
                                  <TransaksiJualTableComponent columns={columns} dataSource={filteredTransaksi} loading={loadingTransaksi || loadingDependencies} isFiltering={false} pagination={pagination} handleTableChange={handleTableChange} tableScrollX={tableScrollX} rowClassName={(r, i) => (i % 2 === 0 ? 'table-row-even' : 'table-row-odd')} />
                              </Spin>
                          </Card>
                      </TabPane>
-                     {/* TAB 2 */}
+
+                     {/* TAB 2: Tagihan Per Pelanggan */}
                      <TabPane tab={<Space><PullRequestOutlined /> Tagihan per Pelanggan</Space>} key="2">
                          <TagihanPelangganTab allTransaksi={allTransaksi} loadingTransaksi={loadingTransaksi} />
                      </TabPane>
                  </Tabs>
 
-                 {/* MODALS */}
-                 {isFormModalOpen && (<TransaksiJualForm key={editingTx?.id || 'create'} open={isFormModalOpen} onCancel={handleCloseFormModal} mode={formMode} initialTx={editingTx} plateList={plateList} pelangganList={pelangganList} onSuccess={handleFormSuccess} loadingDependencies={loadingDependencies} />)}
-                 <TransaksiJualDetailModal open={isDetailModalOpen} onCancel={handleCloseDetailModal} transaksi={selectedTransaksi} />
+                 {/* --- MODALS COMPONENTS --- */}
+                 
+                 {/* 1. Modal Form Create/Edit */}
+                 {isFormModalOpen && (
+                    <TransaksiJualForm 
+                        key={editingTx?.id || 'create'} 
+                        open={isFormModalOpen} 
+                        onCancel={handleCloseFormModal} 
+                        mode={formMode} 
+                        initialTx={editingTx} 
+                        plateList={plateList} 
+                        pelangganList={pelangganList} 
+                        onSuccess={handleFormSuccess} 
+                        loadingDependencies={loadingDependencies} 
+                    />
+                 )}
+                 
+                 {/* 2. Modal Detail */}
+                 <TransaksiJualDetailModal 
+                    open={isDetailModalOpen} 
+                    onCancel={handleCloseDetailModal} 
+                    transaksi={selectedTransaksi} 
+                 />
 
-                 {/* Modal PDF (Iframe Preview) */}
+                 {/* 3. Modal HTML Preview (Cetak Nota) */}
+                 <RawTextPreviewModal
+                     visible={isPreviewOpen}
+                     onCancel={() => setIsPreviewOpen(false)}
+                     content={previewContent}
+                     loading={loadingPreview}
+                     title={previewTitle}
+                     onPrint={handlePrintFromPreview}
+                 />
+
+                 {/* 4. Modal PDF Iframe (Cetak Laporan Bulanan) */}
                  <Modal
                      title={txPdfTitle}
                      open={isTxPdfModalOpen}
@@ -521,6 +484,7 @@ export default function TransaksiJualPage() {
                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%'}}><Empty description="Gagal memuat PDF." /></div>
                      )}
                  </Modal>
+
              </Content>
          </Layout>
     );
